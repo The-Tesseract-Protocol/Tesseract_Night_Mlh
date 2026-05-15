@@ -1,0 +1,321 @@
+pragma language_version >= 0.19;
+
+import CompactStandardLibrary;
+
+// =============================================================
+// TesseractCore — Private Business Payments Rail
+// MLH x Midnight Hackathon — May 2026
+// =============================================================
+// Three flows: Batch Pay | Payment Link | Payment Request
+// 5 circuits | 11 flat maps (flat only — no struct maps)
+// Ledger: individual export ledger declarations
+// assert(cond, "msg") — function call form with message
+// if(cond) { ... } else { ... } — parentheses required
+// persistentHash<T>(value: T) — single value; use struct for multi-field
+// Map.lookup(key) → returns V directly (circuit aborts if key not found)
+// =============================================================
+
+// =============================================================
+// HELPER STRUCTS — for multi-field hashing via persistentHash
+// =============================================================
+
+struct PayerCommitInput {
+  payerKey: ZswapCoinPublicKey;
+  batchNonce: Bytes<32>;
+}
+
+struct ClaimNullifierInput {
+  claimSecret: Bytes<32>;
+  leaf: Bytes<32>;
+  batchId: Bytes<32>;
+}
+
+struct RequesterCommitInput {
+  requesterKey: ZswapCoinPublicKey;
+  requestNonce: Bytes<32>;
+}
+
+// =============================================================
+// LEDGER STATE — 11 flat maps
+// =============================================================
+
+// --- Batch Pay + Payment Link (7 maps) ---
+
+// OQ-16 resolved: insertCoin stores QualifiedShieldedCoinInfo keyed by batchId
+export ledger batchCoins: Map<Bytes<32>, QualifiedShieldedCoinInfo>;
+
+// Merkle roots stored as Field (MerkleTreeDigest.field — Poseidon internal nodes)
+export ledger batchMerkleRoots: Map<Bytes<32>, Field>;
+
+// Flat batch registry maps
+export ledger batchDeadlines: Map<Bytes<32>, Uint<64>>;          // batchId → Unix deadline (seconds)
+export ledger batchClaimedAmounts: Map<Bytes<32>, Uint<128>>;    // batchId → cumulative claimed
+export ledger payerCommitments: Map<Bytes<32>, Bytes<32>>;       // batchId → persistentHash(PayerCommitInput)
+export ledger batchReclaimed: Map<Bytes<32>, Boolean>;           // batchId → double-reclaim guard
+
+// Claim double-spend prevention (persistentHash always Bytes<32>)
+export ledger claimNullifiers: Map<Bytes<32>, Boolean>;          // nullifier → claimed flag
+
+// --- Payment Request (4 maps) ---
+
+export ledger requestExists: Map<Bytes<32>, Boolean>;            // requestId → existence guard
+export ledger requestStatus: Map<Bytes<32>, Uint<64>>;           // requestId → 0=open 1=paid 2=expired
+export ledger requestDeadlines: Map<Bytes<32>, Uint<64>>;        // requestId → deadline
+export ledger requestPayeeHash: Map<Bytes<32>, Bytes<32>>;       // requestId → persistentHash(RequesterCommitInput)
+
+// =============================================================
+// WITNESS DECLARATIONS
+// =============================================================
+
+// submitBatchRoot witnesses
+witness getBatchCoin(): ShieldedCoinInfo;
+witness getMerkleRoot(): Field;
+witness getTotalAmount(): Uint<128>;
+witness getPayerKey(): ZswapCoinPublicKey;
+witness getBatchNonce(): Bytes<32>;
+
+// claimPayment witnesses
+witness getClaimAmount(): Uint<128>;
+witness getMerkleProof(): MerkleTreePath<16, Bytes<32>>;
+witness getLeafKey(): ZswapCoinPublicKey;
+witness getClaimSecret(): Bytes<32>;
+
+// reclaimExpiredBatch witnesses
+witness getReclaimPayerKey(): ZswapCoinPublicKey;
+witness getReclaimBatchNonce(): Bytes<32>;
+
+// createPaymentRequest witnesses
+witness getRequesterKey(): ZswapCoinPublicKey;
+witness getRequestNonce(): Bytes<32>;
+
+// markRequestPaid witnesses
+witness getMarkRequesterKey(): ZswapCoinPublicKey;
+witness getMarkRequestNonce(): Bytes<32>;
+
+// =============================================================
+// CIRCUIT 1 — submitBatchRoot
+// Payer locks total batch value + commits Merkle root
+// Public: batchId, deadline
+// Witness: coin, merkleRoot (Field), totalAmount, payerKey, batchNonce
+// =============================================================
+
+export circuit submitBatchRoot(
+  batchId:  Bytes<32>,
+  deadline: Uint<64>
+): [] {
+  const coin = getBatchCoin();
+  const merkleRoot = getMerkleRoot();
+  const totalAmount = getTotalAmount();
+  const payerKey = getPayerKey();
+  const batchNonce = getBatchNonce();
+
+  // Verify coin value matches declared total
+  assert(coin.value == totalAmount as Uint<128>, "coin value must equal totalAmount");
+
+  // Accept shielded coin into TesseractCore custody
+  receiveShielded(disclose(coin));
+
+  // OQ-16: store coin reference for claims via insertCoin
+  batchCoins.insertCoin(
+    disclose(batchId),
+    disclose(coin),
+    right<ZswapCoinPublicKey, ContractAddress>(kernel.self())
+  );
+
+  // Record batch metadata
+  batchMerkleRoots.insert(disclose(batchId), disclose(merkleRoot));
+  batchDeadlines.insert(disclose(batchId), disclose(deadline));
+  batchClaimedAmounts.insert(disclose(batchId), 0 as Uint<128>);
+  const payerInput = PayerCommitInput { payerKey: payerKey, batchNonce: batchNonce };
+  payerCommitments.insert(
+    disclose(batchId),
+    persistentHash<PayerCommitInput>(disclose(payerInput))
+  );
+  batchReclaimed.insert(disclose(batchId), false);
+}
+
+// =============================================================
+// CIRCUIT 2 — claimPayment
+// Recipient proves Merkle inclusion, receives shielded UTXO
+// Public: batchId, encryptedAuditMemo
+// Witness: amount, merkleProof (MerkleTreePath<16,Bytes<32>>), leafKey, claimSecret
+// =============================================================
+
+export circuit claimPayment(
+  batchId:            Bytes<32>,
+  encryptedAuditMemo: Bytes<128>
+): [] {
+  const amount = getClaimAmount();
+  const merkleProof = getMerkleProof();
+  const leafKey = getLeafKey();
+  const claimSecret = getClaimSecret();
+
+  // 1. Deadline check — batch must still be live
+  // Map.lookup returns value directly; circuit aborts if key missing
+  const deadline = batchDeadlines.lookup(disclose(batchId));
+  assert(blockTimeLt(disclose(deadline)), "batch deadline has passed");
+
+  // 2. Nullifier double-spend check
+  // Nullifier = hash of claimSecret + leaf + batchId
+  const nullInput = ClaimNullifierInput {
+    claimSecret: claimSecret,
+    leaf: merkleProof.leaf,
+    batchId: batchId
+  };
+  const nullifier = persistentHash<ClaimNullifierInput>(disclose(nullInput));
+  // Member check: if key doesn't exist, lookup would abort — use member() first
+  const alreadyClaimed = claimNullifiers.member(nullifier);
+  assert(!alreadyClaimed, "already claimed");
+
+  // 3. Merkle proof verification using stdlib merkleTreePathRootNoLeafHash
+  // leaf in MerkleTreePath = persistentHash(recipientKey, amount) — pre-hashed by witness builder
+  const computedRoot = merkleTreePathRootNoLeafHash<16>(merkleProof);
+  const storedRootField = batchMerkleRoots.lookup(disclose(batchId));
+  assert(computedRoot.field == storedRootField, "invalid merkle proof");
+
+  // 4. Mark nullifier
+  claimNullifiers.insert(nullifier, true);
+
+  // 5. Update cumulative claimed
+  const prevClaimed = batchClaimedAmounts.lookup(disclose(batchId));
+  batchClaimedAmounts.insert(disclose(batchId), (prevClaimed + disclose(amount)) as Uint<128>);
+
+  // 6. Fetch pool coin + send to recipient
+  const poolCoin = batchCoins.lookup(disclose(batchId));
+  const result = sendShielded(
+    poolCoin,
+    left<ZswapCoinPublicKey, ContractAddress>(disclose(leafKey)),
+    disclose(amount)
+  );
+
+  // 7. Re-store change coin (ShieldedSendResult.change is Maybe<ShieldedCoinInfo>)
+  if(result.change.is_some) {
+    batchCoins.insertCoin(
+      disclose(batchId),
+      result.change.value,
+      right<ZswapCoinPublicKey, ContractAddress>(kernel.self())
+    );
+  } else {
+    batchCoins.remove(disclose(batchId));
+  }
+
+  // 8. Disclose encrypted audit memo (app-side X25519+ChaCha20 ciphertext)
+  disclose(encryptedAuditMemo);
+}
+
+// =============================================================
+// CIRCUIT 3 — reclaimExpiredBatch
+// Payer recovers unclaimed funds after deadline
+// Public: batchId
+// Witness: payerKey, batchNonce
+// =============================================================
+
+export circuit reclaimExpiredBatch(
+  batchId: Bytes<32>
+): [] {
+  const payerKey = getReclaimPayerKey();
+  const batchNonce = getReclaimBatchNonce();
+
+  // 1. Deadline must have passed
+  const deadline = batchDeadlines.lookup(disclose(batchId));
+  assert(blockTimeGt(disclose(deadline)), "batch deadline not yet passed");
+
+  // 2. Not already reclaimed
+  const reclaimed = batchReclaimed.lookup(disclose(batchId));
+  assert(!reclaimed, "batch already reclaimed");
+
+  // 3. Verify payer identity via commitment
+  const storedCommit = payerCommitments.lookup(disclose(batchId));
+  const payerInput = PayerCommitInput { payerKey: payerKey, batchNonce: batchNonce };
+  assert(
+    persistentHash<PayerCommitInput>(disclose(payerInput)) == storedCommit,
+    "invalid payer identity"
+  );
+
+  // 4. Mark reclaimed
+  batchReclaimed.insert(disclose(batchId), true);
+
+  // 5. Return remaining pool coin to payer
+  const poolCoin = batchCoins.lookup(disclose(batchId));
+  const result = sendShielded(
+    poolCoin,
+    left<ZswapCoinPublicKey, ContractAddress>(disclose(payerKey)),
+    poolCoin.value
+  );
+
+  // Re-store change (should be zero, handle defensively)
+  if(result.change.is_some) {
+    batchCoins.insertCoin(
+      disclose(batchId),
+      result.change.value,
+      right<ZswapCoinPublicKey, ContractAddress>(kernel.self())
+    );
+  } else {
+    batchCoins.remove(disclose(batchId));
+  }
+}
+
+// =============================================================
+// CIRCUIT 4 — createPaymentRequest
+// Requester posts private payment obligation on-chain
+// Public: requestId, deadline
+// Witness: requesterKey, requestNonce
+// =============================================================
+
+export circuit createPaymentRequest(
+  requestId: Bytes<32>,
+  deadline:  Uint<64>
+): [] {
+  const requesterKey = getRequesterKey();
+  const requestNonce = getRequestNonce();
+
+  // Guard: requestId must not already exist
+  const alreadyExists = requestExists.member(disclose(requestId));
+  assert(!alreadyExists, "requestId already exists");
+
+  // Deadline must be in future
+  assert(blockTimeLt(disclose(deadline)), "deadline must be in the future");
+
+  // Store request
+  requestExists.insert(disclose(requestId), true);
+  requestStatus.insert(disclose(requestId), 0 as Uint<64>);
+  requestDeadlines.insert(disclose(requestId), disclose(deadline));
+  const reqInput = RequesterCommitInput { requesterKey: requesterKey, requestNonce: requestNonce };
+  requestPayeeHash.insert(
+    disclose(requestId),
+    persistentHash<RequesterCommitInput>(disclose(reqInput))
+  );
+}
+
+// =============================================================
+// CIRCUIT 5 — markRequestPaid
+// Requester confirms receipt of payment
+// Public: requestId
+// Witness: requesterKey, requestNonce
+// =============================================================
+
+export circuit markRequestPaid(
+  requestId: Bytes<32>
+): [] {
+  const requesterKey = getMarkRequesterKey();
+  const requestNonce = getMarkRequestNonce();
+
+  // Must be open (status == 0)
+  const status = requestStatus.lookup(disclose(requestId));
+  assert(status == 0 as Uint<64>, "request not open");
+
+  // Deadline not yet passed
+  const reqDeadline = requestDeadlines.lookup(disclose(requestId));
+  assert(blockTimeLt(disclose(reqDeadline)), "request deadline has passed");
+
+  // Verify caller is requester
+  const storedPayeeHash = requestPayeeHash.lookup(disclose(requestId));
+  const reqInput = RequesterCommitInput { requesterKey: requesterKey, requestNonce: requestNonce };
+  assert(
+    storedPayeeHash == persistentHash<RequesterCommitInput>(disclose(reqInput)),
+    "invalid requester identity"
+  );
+
+  // Mark paid
+  requestStatus.insert(disclose(requestId), 1 as Uint<64>);
+}
