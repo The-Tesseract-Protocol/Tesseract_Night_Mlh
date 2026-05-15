@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm list *)",
+      "Bash(npm search *)",
+      "Bash(npm show *)",
+      "Bash(npx --yes @midnight-ntwrk/compact-runtime --help)",
+      "WebFetch(domain:midnight-skills.netlify.app)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api *)",
+      "Bash(python3 -c \"import sys,json; [print\\(f['name']\\) for f in json.load\\(sys.stdin\\)]\")",
+      "WebFetch(domain:api.github.com)",
+      "Bash(compact compile *)",
+      "Bash(compactc --version)",
+      "Bash(curl -s http://localhost:6300)",
+      "Skill(midnight-compact-guide)",
+      "Bash(echo \"EXIT:$?\")",
+      "Skill(midnight-deploy)",
+      "Skill(midnight-sdk-guide)",
+      "Bash(npm install *)",
+      "Bash(curl -s http://127.0.0.1:8088/api/v1/status)",
+      "Bash(curl -s http://127.0.0.1:6300/status)",
+      "Bash(curl -s http://127.0.0.1:8088/)",
+      "Bash(curl -s http://127.0.0.1:9944)",
+      "Bash(npx tsc *)",
+      "Bash(npx tsx *)",
+      "Bash(docker compose *)",
+      "Bash(curl -s http://127.0.0.1:8088/api/v4/graphql -X POST -H \"Content-Type: application/json\" -d '{\"query\":\"{__typename}\"}')",
+      "Read(//private/tmp/midnight-local-dev/**)",
+      "Bash(curl *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Read(//tmp/**)",
+      "Bash(/Users/18abhinav07/.nvm/versions/node/v22.15.0/bin/npx tsx *)",
+      "Bash(python3 -m json.tool)"
+    ]
+  }
+}
