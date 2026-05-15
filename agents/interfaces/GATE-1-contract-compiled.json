@@ -1,0 +1,62 @@
+{
+  "status": "compiled",
+  "circuits": [
+    "submitBatchRoot",
+    "claimPayment",
+    "reclaimExpiredBatch",
+    "createPaymentRequest",
+    "markRequestPaid"
+  ],
+  "ledgerMaps": [
+    "batchCoins",
+    "batchMerkleRoots",
+    "batchDeadlines",
+    "batchClaimedAmounts",
+    "payerCommitments",
+    "batchReclaimed",
+    "claimNullifiers",
+    "requestExists",
+    "requestStatus",
+    "requestDeadlines",
+    "requestPayeeHash"
+  ],
+  "helperStructs": [
+    "PayerCommitInput",
+    "ClaimNullifierInput",
+    "RequesterCommitInput"
+  ],
+  "contractFile": "src/contract/TesseractCore.compact",
+  "compiledOutputDir": "src/contract/compiled",
+  "compiledAt": "2026-05-15T16:13:00Z",
+  "compactVersion": "0.31.0",
+  "proofServerStatus": "ok",
+  "proofServerPort": 6300,
+  "proofServerImage": "midnightnetwork/proof-server:6.1.0-alpha.6",
+  "mcpAvailable": false,
+  "midnightMcpStatus": "midnight MCP connected but no docs search tool tested — used docs in vault research files",
+  "circuitStats": {
+    "submitBatchRoot":       { "k": 15, "rows": 17206 },
+    "claimPayment":          { "k": 15, "rows": 31191 },
+    "reclaimExpiredBatch":   { "k": 15, "rows": 16762 },
+    "createPaymentRequest":  { "k": 13, "rows": 4777  },
+    "markRequestPaid":       { "k": 13, "rows": 4722  }
+  },
+  "keyFindings": {
+    "ledgerSyntax": "export ledger name: Type; — individual declarations, NOT ledger { } block",
+    "assertSyntax": "assert(condition, 'message') — function call form with parentheses",
+    "ifSyntax": "if(condition) { } else { } — parentheses required around condition",
+    "persistentHash": "persistentHash<T>(singleValue) — single arg only; use struct for multi-field",
+    "mapLookup": "map.lookup(key) returns V directly — no Maybe wrapper in circuit code; map.member(key) for existence check",
+    "maybePattern": "Maybe<T>.is_some applies to ShieldedSendResult.change — NOT to map lookups in circuits",
+    "merkleType": "MerkleTreePath<16, Bytes<32>> + merkleTreePathRootNoLeafHash<16>() — stdlib replaces manual loop",
+    "merkleRootStorage": "batchMerkleRoots stores Field (MerkleTreeDigest.field) NOT Bytes<32>",
+    "arithmeticCast": "integer arithmetic must be cast explicitly: (a + b) as Uint<128>"
+  },
+  "notes": [
+    "claimPayment rows=31191 is within k=15 budget (~32k rows max). No need to drop D=8.",
+    "All 3 helper structs (PayerCommitInput, ClaimNullifierInput, RequesterCommitInput) must be constructed identically in TypeScript for hash parity.",
+    "batchMerkleRoots now stores Field not Bytes<32> — web app Merkle root parity test must compare .field values.",
+    "claimNullifiers uses map.member() before lookup to avoid circuit abort on missing key.",
+    "requestExists uses map.member() for existence check in createPaymentRequest."
+  ]
+}
