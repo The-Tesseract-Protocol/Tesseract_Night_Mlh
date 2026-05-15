@@ -67,10 +67,8 @@ export ledger requestPayeeHash: Map<Bytes<32>, Bytes<32>>;       // requestId �
 // WITNESS DECLARATIONS
 // =============================================================
 
-// submitBatchRoot witnesses
-witness getBatchCoin(): ShieldedCoinInfo;
+// submitBatchRoot witnesses (coin is a public circuit parameter — not a witness)
 witness getMerkleRoot(): Field;
-witness getTotalAmount(): Uint<128>;
 witness getPayerKey(): ZswapCoinPublicKey;
 witness getBatchNonce(): Bytes<32>;
 
@@ -95,24 +93,21 @@ witness getMarkRequestNonce(): Bytes<32>;
 // =============================================================
 // CIRCUIT 1 — submitBatchRoot
 // Payer locks total batch value + commits Merkle root
-// Public: batchId, deadline
-// Witness: coin, merkleRoot (Field), totalAmount, payerKey, batchNonce
+// Public: batchId, deadline, coin (ShieldedCoinInfo — enables wallet balancer routing)
+// Witness: merkleRoot (Field), payerKey, batchNonce
 // =============================================================
 
 export circuit submitBatchRoot(
   batchId:  Bytes<32>,
-  deadline: Uint<64>
+  deadline: Uint<64>,
+  coin:     ShieldedCoinInfo
 ): [] {
-  const coin = getBatchCoin();
   const merkleRoot = getMerkleRoot();
-  const totalAmount = getTotalAmount();
   const payerKey = getPayerKey();
   const batchNonce = getBatchNonce();
 
-  // Verify coin value matches declared total
-  assert(coin.value == totalAmount as Uint<128>, "coin value must equal totalAmount");
-
   // Accept shielded coin into TesseractCore custody
+  // coin is a public parameter; receiveShielded validates the ZSwap UTXO
   receiveShielded(disclose(coin));
 
   // OQ-16: store coin reference for claims via insertCoin

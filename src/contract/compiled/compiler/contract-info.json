@@ -21,6 +21,36 @@
             "type-name": "Uint",
             "maxval": 18446744073709551615
           }
+        },
+        {
+          "name": "coin",
+          "type": {
+            "type-name": "Struct",
+            "name": "ShieldedCoinInfo",
+            "elements": [
+              {
+                "name": "nonce",
+                "type": {
+                  "type-name": "Bytes",
+                  "length": 32
+                }
+              },
+              {
+                "name": "color",
+                "type": {
+                  "type-name": "Bytes",
+                  "length": 32
+                }
+              },
+              {
+                "name": "value",
+                "type": {
+                  "type-name": "Uint",
+                  "maxval": 340282366920938463463374607431768211455
+                }
+              }
+            ]
+          }
         }
       ],
       "result-type": {
@@ -122,52 +152,11 @@
   ],
   "witnesses": [
     {
-      "name": "getBatchCoin",
-      "arguments": [
-      ],
-      "result type": {
-        "type-name": "Struct",
-        "name": "ShieldedCoinInfo",
-        "elements": [
-          {
-            "name": "nonce",
-            "type": {
-              "type-name": "Bytes",
-              "length": 32
-            }
-          },
-          {
-            "name": "color",
-            "type": {
-              "type-name": "Bytes",
-              "length": 32
-            }
-          },
-          {
-            "name": "value",
-            "type": {
-              "type-name": "Uint",
-              "maxval": 340282366920938463463374607431768211455
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "getMerkleRoot",
       "arguments": [
       ],
       "result type": {
         "type-name": "Field"
-      }
-    },
-    {
-      "name": "getTotalAmount",
-      "arguments": [
-      ],
-      "result type": {
-        "type-name": "Uint",
-        "maxval": 340282366920938463463374607431768211455
       }
     },
     {
