@@ -291,14 +291,8 @@ export class Contract {
     if (typeof(witnesses_0) !== 'object') {
       throw new __compactRuntime.CompactError('first (witnesses) argument to Contract constructor is not an object');
     }
-    if (typeof(witnesses_0.getBatchCoin) !== 'function') {
-      throw new __compactRuntime.CompactError('first (witnesses) argument to Contract constructor does not contain a function-valued field named getBatchCoin');
-    }
     if (typeof(witnesses_0.getMerkleRoot) !== 'function') {
       throw new __compactRuntime.CompactError('first (witnesses) argument to Contract constructor does not contain a function-valued field named getMerkleRoot');
-    }
-    if (typeof(witnesses_0.getTotalAmount) !== 'function') {
-      throw new __compactRuntime.CompactError('first (witnesses) argument to Contract constructor does not contain a function-valued field named getTotalAmount');
     }
     if (typeof(witnesses_0.getPayerKey) !== 'function') {
       throw new __compactRuntime.CompactError('first (witnesses) argument to Contract constructor does not contain a function-valued field named getPayerKey');
@@ -339,38 +333,46 @@ export class Contract {
     this.witnesses = witnesses_0;
     this.circuits = {
       submitBatchRoot: (...args_1) => {
-        if (args_1.length !== 3) {
-          throw new __compactRuntime.CompactError(`submitBatchRoot: expected 3 arguments (as invoked from Typescript), received ${args_1.length}`);
+        if (args_1.length !== 4) {
+          throw new __compactRuntime.CompactError(`submitBatchRoot: expected 4 arguments (as invoked from Typescript), received ${args_1.length}`);
         }
         const contextOrig_0 = args_1[0];
         const batchId_0 = args_1[1];
         const deadline_0 = args_1[2];
+        const coin_0 = args_1[3];
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('submitBatchRoot',
                                      'argument 1 (as invoked from Typescript)',
-                                     'TesseractCore.compact line 102 char 1',
+                                     'TesseractCore.compact line 100 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
         if (!(batchId_0.buffer instanceof ArrayBuffer && batchId_0.BYTES_PER_ELEMENT === 1 && batchId_0.length === 32)) {
           __compactRuntime.typeError('submitBatchRoot',
                                      'argument 1 (argument 2 as invoked from Typescript)',
-                                     'TesseractCore.compact line 102 char 1',
+                                     'TesseractCore.compact line 100 char 1',
                                      'Bytes<32>',
                                      batchId_0)
         }
         if (!(typeof(deadline_0) === 'bigint' && deadline_0 >= 0n && deadline_0 <= 18446744073709551615n)) {
           __compactRuntime.typeError('submitBatchRoot',
                                      'argument 2 (argument 3 as invoked from Typescript)',
-                                     'TesseractCore.compact line 102 char 1',
+                                     'TesseractCore.compact line 100 char 1',
                                      'Uint<0..18446744073709551616>',
                                      deadline_0)
+        }
+        if (!(typeof(coin_0) === 'object' && coin_0.nonce.buffer instanceof ArrayBuffer && coin_0.nonce.BYTES_PER_ELEMENT === 1 && coin_0.nonce.length === 32 && coin_0.color.buffer instanceof ArrayBuffer && coin_0.color.BYTES_PER_ELEMENT === 1 && coin_0.color.length === 32 && typeof(coin_0.value) === 'bigint' && coin_0.value >= 0n && coin_0.value <= 340282366920938463463374607431768211455n)) {
+          __compactRuntime.typeError('submitBatchRoot',
+                                     'argument 3 (argument 4 as invoked from Typescript)',
+                                     'TesseractCore.compact line 100 char 1',
+                                     'struct ShieldedCoinInfo<nonce: Bytes<32>, color: Bytes<32>, value: Uint<0..340282366920938463463374607431768211456>>',
+                                     coin_0)
         }
         const context = { ...contextOrig_0, gasCost: __compactRuntime.emptyRunningCost() };
         const partialProofData = {
           input: {
-            value: _descriptor_0.toValue(batchId_0).concat(_descriptor_1.toValue(deadline_0)),
-            alignment: _descriptor_0.alignment().concat(_descriptor_1.alignment())
+            value: _descriptor_0.toValue(batchId_0).concat(_descriptor_1.toValue(deadline_0).concat(_descriptor_5.toValue(coin_0))),
+            alignment: _descriptor_0.alignment().concat(_descriptor_1.alignment().concat(_descriptor_5.alignment()))
           },
           output: undefined,
           publicTranscript: [],
@@ -379,7 +381,8 @@ export class Contract {
         const result_0 = this._submitBatchRoot_0(context,
                                                  partialProofData,
                                                  batchId_0,
-                                                 deadline_0);
+                                                 deadline_0,
+                                                 coin_0);
         partialProofData.output = { value: [], alignment: [] };
         return { result: result_0, context: context, proofData: partialProofData, gasCost: context.gasCost };
       },
@@ -393,21 +396,21 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('claimPayment',
                                      'argument 1 (as invoked from Typescript)',
-                                     'TesseractCore.compact line 144 char 1',
+                                     'TesseractCore.compact line 139 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
         if (!(batchId_0.buffer instanceof ArrayBuffer && batchId_0.BYTES_PER_ELEMENT === 1 && batchId_0.length === 32)) {
           __compactRuntime.typeError('claimPayment',
                                      'argument 1 (argument 2 as invoked from Typescript)',
-                                     'TesseractCore.compact line 144 char 1',
+                                     'TesseractCore.compact line 139 char 1',
                                      'Bytes<32>',
                                      batchId_0)
         }
         if (!(encryptedAuditMemo_0.buffer instanceof ArrayBuffer && encryptedAuditMemo_0.BYTES_PER_ELEMENT === 1 && encryptedAuditMemo_0.length === 128)) {
           __compactRuntime.typeError('claimPayment',
                                      'argument 2 (argument 3 as invoked from Typescript)',
-                                     'TesseractCore.compact line 144 char 1',
+                                     'TesseractCore.compact line 139 char 1',
                                      'Bytes<128>',
                                      encryptedAuditMemo_0)
         }
@@ -437,14 +440,14 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('reclaimExpiredBatch',
                                      'argument 1 (as invoked from Typescript)',
-                                     'TesseractCore.compact line 213 char 1',
+                                     'TesseractCore.compact line 208 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
         if (!(batchId_0.buffer instanceof ArrayBuffer && batchId_0.BYTES_PER_ELEMENT === 1 && batchId_0.length === 32)) {
           __compactRuntime.typeError('reclaimExpiredBatch',
                                      'argument 1 (argument 2 as invoked from Typescript)',
-                                     'TesseractCore.compact line 213 char 1',
+                                     'TesseractCore.compact line 208 char 1',
                                      'Bytes<32>',
                                      batchId_0)
         }
@@ -474,21 +477,21 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('createPaymentRequest',
                                      'argument 1 (as invoked from Typescript)',
-                                     'TesseractCore.compact line 265 char 1',
+                                     'TesseractCore.compact line 260 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
         if (!(requestId_0.buffer instanceof ArrayBuffer && requestId_0.BYTES_PER_ELEMENT === 1 && requestId_0.length === 32)) {
           __compactRuntime.typeError('createPaymentRequest',
                                      'argument 1 (argument 2 as invoked from Typescript)',
-                                     'TesseractCore.compact line 265 char 1',
+                                     'TesseractCore.compact line 260 char 1',
                                      'Bytes<32>',
                                      requestId_0)
         }
         if (!(typeof(deadline_0) === 'bigint' && deadline_0 >= 0n && deadline_0 <= 18446744073709551615n)) {
           __compactRuntime.typeError('createPaymentRequest',
                                      'argument 2 (argument 3 as invoked from Typescript)',
-                                     'TesseractCore.compact line 265 char 1',
+                                     'TesseractCore.compact line 260 char 1',
                                      'Uint<0..18446744073709551616>',
                                      deadline_0)
         }
@@ -518,14 +521,14 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('markRequestPaid',
                                      'argument 1 (as invoked from Typescript)',
-                                     'TesseractCore.compact line 297 char 1',
+                                     'TesseractCore.compact line 292 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
         if (!(requestId_0.buffer instanceof ArrayBuffer && requestId_0.BYTES_PER_ELEMENT === 1 && requestId_0.length === 32)) {
           __compactRuntime.typeError('markRequestPaid',
                                      'argument 1 (argument 2 as invoked from Typescript)',
-                                     'TesseractCore.compact line 297 char 1',
+                                     'TesseractCore.compact line 292 char 1',
                                      'Bytes<32>',
                                      requestId_0)
         }
@@ -1034,23 +1037,6 @@ export class Contract {
     });
     return result_0;
   }
-  _getBatchCoin_0(context, partialProofData) {
-    const witnessContext_0 = __compactRuntime.createWitnessContext(ledger(context.currentQueryContext.state), context.currentPrivateState, context.currentQueryContext.address);
-    const [nextPrivateState_0, result_0] = this.witnesses.getBatchCoin(witnessContext_0);
-    context.currentPrivateState = nextPrivateState_0;
-    if (!(typeof(result_0) === 'object' && result_0.nonce.buffer instanceof ArrayBuffer && result_0.nonce.BYTES_PER_ELEMENT === 1 && result_0.nonce.length === 32 && result_0.color.buffer instanceof ArrayBuffer && result_0.color.BYTES_PER_ELEMENT === 1 && result_0.color.length === 32 && typeof(result_0.value) === 'bigint' && result_0.value >= 0n && result_0.value <= 340282366920938463463374607431768211455n)) {
-      __compactRuntime.typeError('getBatchCoin',
-                                 'return value',
-                                 'TesseractCore.compact line 71 char 1',
-                                 'struct ShieldedCoinInfo<nonce: Bytes<32>, color: Bytes<32>, value: Uint<0..340282366920938463463374607431768211456>>',
-                                 result_0)
-    }
-    partialProofData.privateTranscriptOutputs.push({
-      value: _descriptor_5.toValue(result_0),
-      alignment: _descriptor_5.alignment()
-    });
-    return result_0;
-  }
   _getMerkleRoot_0(context, partialProofData) {
     const witnessContext_0 = __compactRuntime.createWitnessContext(ledger(context.currentQueryContext.state), context.currentPrivateState, context.currentQueryContext.address);
     const [nextPrivateState_0, result_0] = this.witnesses.getMerkleRoot(witnessContext_0);
@@ -1058,30 +1044,13 @@ export class Contract {
     if (!(typeof(result_0) === 'bigint' && result_0 >= 0 && result_0 <= __compactRuntime.MAX_FIELD)) {
       __compactRuntime.typeError('getMerkleRoot',
                                  'return value',
-                                 'TesseractCore.compact line 72 char 1',
+                                 'TesseractCore.compact line 71 char 1',
                                  'Field',
                                  result_0)
     }
     partialProofData.privateTranscriptOutputs.push({
       value: _descriptor_9.toValue(result_0),
       alignment: _descriptor_9.alignment()
-    });
-    return result_0;
-  }
-  _getTotalAmount_0(context, partialProofData) {
-    const witnessContext_0 = __compactRuntime.createWitnessContext(ledger(context.currentQueryContext.state), context.currentPrivateState, context.currentQueryContext.address);
-    const [nextPrivateState_0, result_0] = this.witnesses.getTotalAmount(witnessContext_0);
-    context.currentPrivateState = nextPrivateState_0;
-    if (!(typeof(result_0) === 'bigint' && result_0 >= 0n && result_0 <= 340282366920938463463374607431768211455n)) {
-      __compactRuntime.typeError('getTotalAmount',
-                                 'return value',
-                                 'TesseractCore.compact line 73 char 1',
-                                 'Uint<0..340282366920938463463374607431768211456>',
-                                 result_0)
-    }
-    partialProofData.privateTranscriptOutputs.push({
-      value: _descriptor_3.toValue(result_0),
-      alignment: _descriptor_3.alignment()
     });
     return result_0;
   }
@@ -1092,7 +1061,7 @@ export class Contract {
     if (!(typeof(result_0) === 'object' && result_0.bytes.buffer instanceof ArrayBuffer && result_0.bytes.BYTES_PER_ELEMENT === 1 && result_0.bytes.length === 32)) {
       __compactRuntime.typeError('getPayerKey',
                                  'return value',
-                                 'TesseractCore.compact line 74 char 1',
+                                 'TesseractCore.compact line 72 char 1',
                                  'struct ZswapCoinPublicKey<bytes: Bytes<32>>',
                                  result_0)
     }
@@ -1109,7 +1078,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('getBatchNonce',
                                  'return value',
-                                 'TesseractCore.compact line 75 char 1',
+                                 'TesseractCore.compact line 73 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -1126,7 +1095,7 @@ export class Contract {
     if (!(typeof(result_0) === 'bigint' && result_0 >= 0n && result_0 <= 340282366920938463463374607431768211455n)) {
       __compactRuntime.typeError('getClaimAmount',
                                  'return value',
-                                 'TesseractCore.compact line 78 char 1',
+                                 'TesseractCore.compact line 76 char 1',
                                  'Uint<0..340282366920938463463374607431768211456>',
                                  result_0)
     }
@@ -1143,7 +1112,7 @@ export class Contract {
     if (!(typeof(result_0) === 'object' && result_0.leaf.buffer instanceof ArrayBuffer && result_0.leaf.BYTES_PER_ELEMENT === 1 && result_0.leaf.length === 32 && Array.isArray(result_0.path) && result_0.path.length === 16 && result_0.path.every((t) => typeof(t) === 'object' && typeof(t.sibling) === 'object' && typeof(t.sibling.field) === 'bigint' && t.sibling.field >= 0 && t.sibling.field <= __compactRuntime.MAX_FIELD && typeof(t.goes_left) === 'boolean'))) {
       __compactRuntime.typeError('getMerkleProof',
                                  'return value',
-                                 'TesseractCore.compact line 79 char 1',
+                                 'TesseractCore.compact line 77 char 1',
                                  'struct MerkleTreePath<leaf: Bytes<32>, path: Vector<16, struct MerkleTreePathEntry<sibling: struct MerkleTreeDigest<field: Field>, goes_left: Boolean>>>',
                                  result_0)
     }
@@ -1160,7 +1129,7 @@ export class Contract {
     if (!(typeof(result_0) === 'object' && result_0.bytes.buffer instanceof ArrayBuffer && result_0.bytes.BYTES_PER_ELEMENT === 1 && result_0.bytes.length === 32)) {
       __compactRuntime.typeError('getLeafKey',
                                  'return value',
-                                 'TesseractCore.compact line 80 char 1',
+                                 'TesseractCore.compact line 78 char 1',
                                  'struct ZswapCoinPublicKey<bytes: Bytes<32>>',
                                  result_0)
     }
@@ -1177,7 +1146,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('getClaimSecret',
                                  'return value',
-                                 'TesseractCore.compact line 81 char 1',
+                                 'TesseractCore.compact line 79 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -1194,7 +1163,7 @@ export class Contract {
     if (!(typeof(result_0) === 'object' && result_0.bytes.buffer instanceof ArrayBuffer && result_0.bytes.BYTES_PER_ELEMENT === 1 && result_0.bytes.length === 32)) {
       __compactRuntime.typeError('getReclaimPayerKey',
                                  'return value',
-                                 'TesseractCore.compact line 84 char 1',
+                                 'TesseractCore.compact line 82 char 1',
                                  'struct ZswapCoinPublicKey<bytes: Bytes<32>>',
                                  result_0)
     }
@@ -1211,7 +1180,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('getReclaimBatchNonce',
                                  'return value',
-                                 'TesseractCore.compact line 85 char 1',
+                                 'TesseractCore.compact line 83 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -1228,7 +1197,7 @@ export class Contract {
     if (!(typeof(result_0) === 'object' && result_0.bytes.buffer instanceof ArrayBuffer && result_0.bytes.BYTES_PER_ELEMENT === 1 && result_0.bytes.length === 32)) {
       __compactRuntime.typeError('getRequesterKey',
                                  'return value',
-                                 'TesseractCore.compact line 88 char 1',
+                                 'TesseractCore.compact line 86 char 1',
                                  'struct ZswapCoinPublicKey<bytes: Bytes<32>>',
                                  result_0)
     }
@@ -1245,7 +1214,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('getRequestNonce',
                                  'return value',
-                                 'TesseractCore.compact line 89 char 1',
+                                 'TesseractCore.compact line 87 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -1262,7 +1231,7 @@ export class Contract {
     if (!(typeof(result_0) === 'object' && result_0.bytes.buffer instanceof ArrayBuffer && result_0.bytes.BYTES_PER_ELEMENT === 1 && result_0.bytes.length === 32)) {
       __compactRuntime.typeError('getMarkRequesterKey',
                                  'return value',
-                                 'TesseractCore.compact line 92 char 1',
+                                 'TesseractCore.compact line 90 char 1',
                                  'struct ZswapCoinPublicKey<bytes: Bytes<32>>',
                                  result_0)
     }
@@ -1279,7 +1248,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('getMarkRequestNonce',
                                  'return value',
-                                 'TesseractCore.compact line 93 char 1',
+                                 'TesseractCore.compact line 91 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -1289,14 +1258,10 @@ export class Contract {
     });
     return result_0;
   }
-  _submitBatchRoot_0(context, partialProofData, batchId_0, deadline_0) {
-    const coin_0 = this._getBatchCoin_0(context, partialProofData);
+  _submitBatchRoot_0(context, partialProofData, batchId_0, deadline_0, coin_0) {
     const merkleRoot_0 = this._getMerkleRoot_0(context, partialProofData);
-    const totalAmount_0 = this._getTotalAmount_0(context, partialProofData);
     const payerKey_0 = this._getPayerKey_0(context, partialProofData);
     const batchNonce_0 = this._getBatchNonce_0(context, partialProofData);
-    __compactRuntime.assert(this._equal_2(coin_0.value, totalAmount_0),
-                            'coin value must equal totalAmount');
     this._receiveShielded_0(context, partialProofData, coin_0);
     const tmp_0 = this._right_0(_descriptor_7.fromValue(__compactRuntime.queryLedgerState(context,
                                                                                           partialProofData,
@@ -1346,7 +1311,7 @@ export class Contract {
                                                                                                     { ins: { cached: false,
                                                                                                              n: 1 } },
                                                                                                     { ins: { cached: true,
-                                                                                                             n: 1 } }]) : (() => { throw new __compactRuntime.CompactError(`TesseractCore.compact line 119 char 3: Coin commitment not found. Check the coin has been received (or call 'createZswapOutput')`); })();
+                                                                                                             n: 1 } }]) : (() => { throw new __compactRuntime.CompactError(`TesseractCore.compact line 114 char 3: Coin commitment not found. Check the coin has been received (or call 'createZswapOutput')`); })();
     __compactRuntime.queryLedgerState(context,
                                       partialProofData,
                                       [
@@ -1543,7 +1508,7 @@ export class Contract {
                                                                                                 result: undefined } }]).value);
     const tmp_0 = ((t1) => {
                     if (t1 > 340282366920938463463374607431768211455n) {
-                      throw new __compactRuntime.CompactError('TesseractCore.compact line 181 char 49: cast from Field or Uint value to smaller Uint value failed: ' + t1 + ' is greater than 340282366920938463463374607431768211455');
+                      throw new __compactRuntime.CompactError('TesseractCore.compact line 176 char 49: cast from Field or Uint value to smaller Uint value failed: ' + t1 + ' is greater than 340282366920938463463374607431768211455');
                     }
                     return t1;
                   })(prevClaimed_0 + amount_0);
@@ -1637,7 +1602,7 @@ export class Contract {
                                                                                                      { ins: { cached: false,
                                                                                                               n: 1 } },
                                                                                                      { ins: { cached: true,
-                                                                                                              n: 1 } }]) : (() => { throw new __compactRuntime.CompactError(`TesseractCore.compact line 193 char 5: Coin commitment not found. Check the coin has been received (or call 'createZswapOutput')`); })();
+                                                                                                              n: 1 } }]) : (() => { throw new __compactRuntime.CompactError(`TesseractCore.compact line 188 char 5: Coin commitment not found. Check the coin has been received (or call 'createZswapOutput')`); })();
     } else {
       __compactRuntime.queryLedgerState(context,
                                         partialProofData,
@@ -1720,7 +1685,7 @@ export class Contract {
                                                                                       { popeq: { cached: false,
                                                                                                  result: undefined } }]).value);
     const payerInput_0 = { payerKey: payerKey_0, batchNonce: batchNonce_0 };
-    __compactRuntime.assert(this._equal_3(this._persistentHash_2(payerInput_0),
+    __compactRuntime.assert(this._equal_2(this._persistentHash_2(payerInput_0),
                                           storedCommit_0),
                             'invalid payer identity');
     __compactRuntime.queryLedgerState(context,
@@ -1813,7 +1778,7 @@ export class Contract {
                                                                                                      { ins: { cached: false,
                                                                                                               n: 1 } },
                                                                                                      { ins: { cached: true,
-                                                                                                              n: 1 } }]) : (() => { throw new __compactRuntime.CompactError(`TesseractCore.compact line 248 char 5: Coin commitment not found. Check the coin has been received (or call 'createZswapOutput')`); })();
+                                                                                                              n: 1 } }]) : (() => { throw new __compactRuntime.CompactError(`TesseractCore.compact line 243 char 5: Coin commitment not found. Check the coin has been received (or call 'createZswapOutput')`); })();
     } else {
       __compactRuntime.queryLedgerState(context,
                                         partialProofData,
@@ -1951,7 +1916,7 @@ export class Contract {
                                                                                                            alignment: _descriptor_0.alignment() } }] } },
                                                                                 { popeq: { cached: false,
                                                                                            result: undefined } }]).value);
-    __compactRuntime.assert(this._equal_4(status_0, 0n), 'request not open');
+    __compactRuntime.assert(this._equal_3(status_0, 0n), 'request not open');
     const reqDeadline_0 = _descriptor_1.fromValue(__compactRuntime.queryLedgerState(context,
                                                                                     partialProofData,
                                                                                     [
@@ -1994,7 +1959,7 @@ export class Contract {
                                                                                                     result: undefined } }]).value);
     const reqInput_0 = { requesterKey: requesterKey_0,
                          requestNonce: requestNonce_0 };
-    __compactRuntime.assert(this._equal_5(storedPayeeHash_0,
+    __compactRuntime.assert(this._equal_4(storedPayeeHash_0,
                                           this._persistentHash_3(reqInput_0)),
                             'invalid requester identity');
     const tmp_0 = 1n;
@@ -2030,18 +1995,14 @@ export class Contract {
     return true;
   }
   _equal_2(x0, y0) {
-    if (x0 !== y0) { return false; }
-    return true;
-  }
-  _equal_3(x0, y0) {
     if (!x0.every((x, i) => y0[i] === x)) { return false; }
     return true;
   }
-  _equal_4(x0, y0) {
+  _equal_3(x0, y0) {
     if (x0 !== y0) { return false; }
     return true;
   }
-  _equal_5(x0, y0) {
+  _equal_4(x0, y0) {
     if (!x0.every((x, i) => y0[i] === x)) { return false; }
     return true;
   }
@@ -3265,9 +3226,7 @@ const _emptyContext = {
   currentQueryContext: new __compactRuntime.QueryContext(new __compactRuntime.ContractState().data, __compactRuntime.dummyContractAddress())
 };
 const _dummyContract = new Contract({
-  getBatchCoin: (...args) => undefined,
   getMerkleRoot: (...args) => undefined,
-  getTotalAmount: (...args) => undefined,
   getPayerKey: (...args) => undefined,
   getBatchNonce: (...args) => undefined,
   getClaimAmount: (...args) => undefined,

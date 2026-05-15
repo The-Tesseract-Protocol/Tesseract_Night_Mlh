@@ -1,12 +1,7 @@
 import type * as __compactRuntime from '@midnight-ntwrk/compact-runtime';
 
 export type Witnesses<PS> = {
-  getBatchCoin(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, { nonce: Uint8Array,
-                                                                             color: Uint8Array,
-                                                                             value: bigint
-                                                                           }];
   getMerkleRoot(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, bigint];
-  getTotalAmount(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, bigint];
   getPayerKey(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, { bytes: Uint8Array
                                                                           }];
   getBatchNonce(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, Uint8Array];
@@ -34,7 +29,9 @@ export type Witnesses<PS> = {
 export type ImpureCircuits<PS> = {
   submitBatchRoot(context: __compactRuntime.CircuitContext<PS>,
                   batchId_0: Uint8Array,
-                  deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+                  deadline_0: bigint,
+                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
+                          }): __compactRuntime.CircuitResults<PS, []>;
   claimPayment(context: __compactRuntime.CircuitContext<PS>,
                batchId_0: Uint8Array,
                encryptedAuditMemo_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
@@ -50,7 +47,9 @@ export type ImpureCircuits<PS> = {
 export type ProvableCircuits<PS> = {
   submitBatchRoot(context: __compactRuntime.CircuitContext<PS>,
                   batchId_0: Uint8Array,
-                  deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+                  deadline_0: bigint,
+                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
+                          }): __compactRuntime.CircuitResults<PS, []>;
   claimPayment(context: __compactRuntime.CircuitContext<PS>,
                batchId_0: Uint8Array,
                encryptedAuditMemo_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
@@ -69,7 +68,9 @@ export type PureCircuits = {
 export type Circuits<PS> = {
   submitBatchRoot(context: __compactRuntime.CircuitContext<PS>,
                   batchId_0: Uint8Array,
-                  deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+                  deadline_0: bigint,
+                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
+                          }): __compactRuntime.CircuitResults<PS, []>;
   claimPayment(context: __compactRuntime.CircuitContext<PS>,
                batchId_0: Uint8Array,
                encryptedAuditMemo_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
