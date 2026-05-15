@@ -1,0 +1,31 @@
+{
+  "gate": "GATE-2",
+  "status": "PASSED",
+  "contractAddress": "b16a54bfa629394c2fd140c98a825a1116fdeb718933384b64ba0acb1756bfb0",
+  "network": "undeployed",
+  "node": "http://127.0.0.1:9944",
+  "indexer": "http://127.0.0.1:8088/api/v3/graphql",
+  "proofServer": "http://127.0.0.1:6300",
+  "deployTxHash": "005aa333cec289be92799236224c164acd3ea3e2a9f9a57247135986ac7c33c750",
+  "deployBlock": 427,
+  "deployedAt": "2026-05-15T21:03:47.001Z",
+  "deployScript": "scripts/deploy.ts",
+  "genesisWalletUsed": "0000000000000000000000000000000000000000000000000000000000000001",
+  "testAccounts": {
+    "Alice": {
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+      "nightBalance": 50000000000,
+      "dustBalance": "~812T"
+    },
+    "Bob": {
+      "mnemonic": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote",
+      "nightBalance": 50000000000,
+      "dustBalance": "~812T"
+    },
+    "Carol": {
+      "mnemonic": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+      "nightBalance": 50000000000,
+      "dustBalance": "~87T"
+    }
+  }
+}
