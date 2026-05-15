@@ -45,6 +45,8 @@ export interface SubmitBatchFlowOutput {
   batchId: Uint8Array;
   batchIdHex: HexString;
   deadline: bigint;
+  /** Public circuit parameter — pass directly to TesseractClient.submitBatch */
+  coin: { nonce: Uint8Array; color: Uint8Array; value: bigint };
   privateState: SubmitBatchPrivateState;
   result: BatchSubmitResult;
   /** Persist to storage: key = batchIdHex, value = this object */
@@ -154,11 +156,9 @@ export function prepareSubmitBatch(input: SubmitBatchFlowInput): SubmitBatchFlow
     });
   }
 
-  // Private state for circuit witnesses
+  // Witness-only private state (coin is a public circuit parameter, not a witness)
   const privateState: SubmitBatchPrivateState = {
-    coin,
     merkleRoot,
-    totalAmount,
     payerKey: { bytes: payerKeyBytes },
     batchNonce: batchNonceBytes,
   };
@@ -177,6 +177,7 @@ export function prepareSubmitBatch(input: SubmitBatchFlowInput): SubmitBatchFlow
     batchId: batchIdBytes,
     batchIdHex,
     deadline,
+    coin,
     privateState,
     result: {
       batchId: batchIdHex,

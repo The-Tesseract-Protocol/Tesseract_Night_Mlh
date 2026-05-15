@@ -88,13 +88,7 @@ export interface ReclaimInput {
 // ── Witness private state ─────────────────────────────────────────────────────
 
 export interface SubmitBatchPrivateState {
-  coin: {
-    nonce: Uint8Array;
-    color: Uint8Array;
-    value: bigint;
-  };
   merkleRoot: bigint;
-  totalAmount: bigint;
   payerKey: { bytes: Uint8Array };
   batchNonce: Uint8Array;
 }
