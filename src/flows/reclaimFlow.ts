@@ -5,7 +5,8 @@
  * from indexer. Caller iterates and calls reclaimRecipientCoin per leaf.
  */
 
-import { ReclaimPrivateState, HexString, fromHex } from '../types/index.js';
+import type { ReclaimPrivateState, HexString } from '../types/index.js';
+import { fromHex } from '../types/index.js';
 import type { PayerRecord } from './submitBatchFlow.js';
 
 export interface ReclaimLeafInput {
@@ -35,7 +36,7 @@ export function prepareReclaimLeaf(input: ReclaimLeafInput): ReclaimLeafOutput {
 }
 
 export function isEligibleForReclaim(record: PayerRecord): boolean {
-  return Date.now() / 1000 > record.deadline;
+  return Date.now() > record.deadline;
 }
 
 export function reclaimLeafInputsFromRecord(

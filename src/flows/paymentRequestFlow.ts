@@ -12,14 +12,8 @@
  * 3. Return for circuit call: markRequestPaid(requestId)
  */
 
-import {
-  PaymentRequestPrivateState,
-  HexString,
-  toHex,
-  fromHex,
-  randomBytes32,
-  deadlineFromHours,
-} from '../types/index.js';
+import type { PaymentRequestPrivateState, HexString } from '../types/index.js';
+import { toHex, fromHex, randomBytes32, deadlineFromHours } from '../types/index.js';
 
 // ── Create Payment Request ───────────────────────────────────────────────────
 
