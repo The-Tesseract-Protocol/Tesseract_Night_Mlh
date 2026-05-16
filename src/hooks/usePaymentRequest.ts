@@ -106,7 +106,7 @@ export function usePaymentRequest(
     setIsLoading(true);
     setError(null);
     try {
-      const { requestId, requestIdHex, deadline, privateState, paymentLink, requesterRecord } =
+      const { requestId, deadline, privateState, paymentLink, requesterRecord } =
         prepareCreatePaymentRequest({
           requesterKeyHex: coinPublicKey,
           deadlineHours: params.deadlineHours,
