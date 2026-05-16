@@ -81,6 +81,21 @@ class _PaymentLeafInputType {
 }
 const PaymentLeafInputType = new _PaymentLeafInputType() as unknown as Parameters<typeof persistentHash>[0];
 
+// CoinMapKey { batchId: Bytes<32>; leaf: Bytes<32>; }
+// Used to compute the recipientCoins map key — prevents cross-batch collision.
+class _CoinMapKeyType {
+  alignment() {
+    return Bytes32.alignment().concat(Bytes32.alignment());
+  }
+  fromValue(_v: unknown): never {
+    throw new Error('fromValue not needed');
+  }
+  toValue(v: { batchId: Uint8Array; leaf: Uint8Array }) {
+    return Bytes32.toValue(v.batchId).concat(Bytes32.toValue(v.leaf));
+  }
+}
+const CoinMapKeyType = new _CoinMapKeyType() as unknown as Parameters<typeof persistentHash>[0];
+
 export function hashPayerCommit(payerKey: { bytes: Uint8Array }, batchNonce: Uint8Array): Uint8Array {
   return persistentHash(PayerCommitInputType, { payerKey, batchNonce } as never);
 }
@@ -102,6 +117,10 @@ export function hashRequesterCommit(
 
 export function hashPaymentLeaf(recipientKey: { bytes: Uint8Array }, amount: bigint): Uint8Array {
   return persistentHash(PaymentLeafInputType, { recipientKey, amount } as never);
+}
+
+export function hashCoinKey(batchId: Uint8Array, leaf: Uint8Array): Uint8Array {
+  return persistentHash(CoinMapKeyType, { batchId, leaf } as never);
 }
 
 // Merkle internal node hash — matches _merkleTreePathEntryRoot in compiled contract
