@@ -4,7 +4,7 @@
  * don't JSON-serialize directly.
  */
 
-import { MerkleTreePath } from '@midnight-ntwrk/compact-runtime';
+import type { MerkleTreePath } from '@midnight-ntwrk/compact-runtime';
 import { fromHex, toHex } from '../types/index.js';
 import type { SerializedClaimPackage } from './submitBatchFlow.js';
 

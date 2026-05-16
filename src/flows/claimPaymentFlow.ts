@@ -19,19 +19,15 @@
 
 import { encryptAuditMemo, EMPTY_MEMO, type AuditRecord } from '../crypto/memo.js';
 import { deserializeClaimPackage } from './claimPackageSerde.js';
-import {
-  ClaimPrivateState,
-  HexString,
-  toHex,
-  fromHex,
-} from '../types/index.js';
+import type { ClaimPrivateState, HexString } from '../types/index.js';
+import { fromHex } from '../types/index.js';
 import type { SerializedClaimPackage } from './submitBatchFlow.js';
 
 export interface ClaimFlowInput {
   /** From URL params or claim package JSON */
   batchIdHex: HexString;
   leafIndex: number;
-  leafHashHex: HexString;
+  leafHashHex?: HexString;   // from URL params; not used in circuit, retained for URL round-trip
   amount: bigint;
   claimSecretHex: HexString;
   leafKeyHex: HexString;  // addressed: recipient key; bearer: own coinPublicKey
@@ -57,13 +53,11 @@ export async function prepareClaimPayment(input: ClaimFlowInput): Promise<ClaimF
   const {
     batchIdHex,
     leafIndex,
-    leafHashHex,
     amount,
     claimSecretHex,
     leafKeyHex,
     serializedProof,
     recipientCoin,
-    bearerMode = false,
     auditorPublicKey,
   } = input;
 
@@ -143,7 +137,7 @@ export function parseClaimUrl(url: string): Omit<ClaimFlowInput, 'serializedProo
       amount: BigInt(params.get('amount')!),
       claimSecretHex: params.get('claimSecret')!,
       leafKeyHex: params.get('leafKey')!,
-      bearerMode: params.get('bearerMode') === 'true',
+      bearerMode: params.get('bearer') === '1',
     };
   } catch {
     return null;
