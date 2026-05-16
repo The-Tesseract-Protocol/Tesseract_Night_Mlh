@@ -1,8 +1,9 @@
 # Tesseract Midnight — Path A Implementation Design
 
 **Date:** 2026-05-16  
-**Status:** Ready for Implementation  
-**Validation:** 3 swarm agents CONDITIONAL_GO — all blockers resolved as design decisions
+**Status:** Ready for Implementation — post-verification update applied  
+**Validation:** 3 swarm agents CONDITIONAL_GO + adversarial verification pass complete  
+**Blocker fixed:** CoinMapKey compound key (batchId + leaf) prevents cross-batch collision
 
 ---
 
@@ -22,10 +23,27 @@ Each recipient gets an independent UTXO pre-created by the payer before `submitB
 
 ## 2. Smart Contract — `TesseractCore.compact`
 
+### 2.0 Helper: CoinMapKey (REQUIRED — prevents cross-batch collision)
+
+Leaf hash alone (`persistentHash(recipientKey, amount)`) is NOT unique across batches.
+Same recipient + same amount in two different batches produces identical leaf hashes → map key collision → second deposit overwrites first coin.
+
+Fix: compound map key = `persistentHash<CoinMapKey>({ batchId, leaf })`.
+
+```compact
+struct CoinMapKey { batchId: Bytes<32>; leaf: Bytes<32>; }
+
+pure circuit computeCoinKey(batchId: Bytes<32>, leaf: Bytes<32>): Bytes<32> {
+  return persistentHash<CoinMapKey>(CoinMapKey { batchId: batchId, leaf: leaf });
+}
+```
+
+Applied in depositRecipientCoin, claimPayment, reclaimRecipientCoin. Does NOT change the Merkle tree leaf format — only the map storage key.
+
 ### 2.1 Ledger Maps (9 flat maps)
 
 ```compact
-// Per-recipient coin storage — key is merkleProof.leaf (Bytes<32>)
+// Per-recipient coin storage — key is computeCoinKey(batchId, leaf) — NOT raw leaf
 export ledger recipientCoins: Map<Bytes<32>, QualifiedShieldedCoinInfo>;
 
 // Batch metadata
@@ -63,11 +81,11 @@ struct RequesterCommitInput { requesterKey: ZswapCoinPublicKey; requestNonce: By
 
 #### Circuit 2 (NEW): `depositRecipientCoin(batchId, recipientLeafHash, coin)`
 - Called once per recipient by payer
-- `coin: ShieldedCoinInfo` is a public parameter
-- Guards: batch must exist (`batchDeadlines.member`), leaf must not already have coin
+- `coin: ShieldedCoinInfo` is a public parameter; zero witnesses
+- Guards: batch exists, batch not expired (`blockTimeLt(batchDeadlines.lookup(d_batchId))`), coinKey not already used
+- `coinKey = computeCoinKey(d_batchId, d_recipientLeafHash)`
 - Calls `receiveShielded(disclose(coin))`
-- Calls `recipientCoins.insertCoin(disclose(recipientLeafHash), disclose(coin), right<...>(kernel.self()))`
-- No witnesses needed
+- Calls `recipientCoins.insertCoin(coinKey, disclose(coin), right<...>(kernel.self()))`
 
 #### Circuit 3: `claimPayment(batchId, encryptedAuditMemo)`
 - Witnesses: `getBatchCoin(): QualifiedShieldedCoinInfo`, `getClaimAmount()`, `getMerkleProof()`, `getLeafKey(): ZswapCoinPublicKey`, `getClaimSecret()`
@@ -75,9 +93,10 @@ struct RequesterCommitInput { requesterKey: ZswapCoinPublicKey; requestNonce: By
   1. `batchDeadlines.lookup(batchId)` → deadline check with `blockTimeLt`
   2. Build nullifier, `claimNullifiers.member()` guard, insert nullifier
   3. `merkleTreePathRootNoLeafHash<16>(merkleProof)` vs `batchMerkleRoots.lookup(batchId)`
-  4. `recipientCoins.lookup(merkleProof.leaf)` → verify coin matches witness
-  5. `sendShielded(coin, left(leafKey), coin.value)` — full value, no change coin
-  6. `recipientCoins.remove(merkleProof.leaf)`
+  4. `d_leaf = disclose(merkleProof.leaf)`; `coinKey = computeCoinKey(disclose(batchId), d_leaf)`
+  5. `recipientCoins.lookup(coinKey)` → verify coin matches witness
+  6. `sendShielded(coin, left(leafKey), coin.value)` — full value, no change coin
+  7. `recipientCoins.remove(coinKey)`
   7. `disclose(encryptedAuditMemo)`
 - **Bearer mode:** `leafKey` witness is caller's own `coinPublicKey` (from URL bearer flow, set client-side)
 
