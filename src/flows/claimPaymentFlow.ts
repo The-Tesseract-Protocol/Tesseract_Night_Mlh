@@ -1,11 +1,16 @@
 /**
- * claimPaymentFlow — Recipient proves Merkle inclusion and receives shielded UTXO.
+ * claimPaymentFlow — Recipient proves Merkle inclusion and receives shielded UTXO (Path A).
  *
  * Flow:
- * 1. Parse / load claim package (from URL params or IndexedDB)
- * 2. Encrypt audit memo (X25519+AES-GCM)
- * 3. Build witness private state
- * 4. Return witnesses + encryptedAuditMemo for circuit call
+ * 1. Caller must fetch recipientCoin from indexer (getRecipientCoin(batchId, leafHash))
+ * 2. Parse / load claim package (from URL params or IndexedDB)
+ * 3. Encrypt audit memo (X25519+AES-GCM)
+ * 4. Build witness private state (includes recipientCoin for getBatchCoin)
+ * 5. Return witnesses + encryptedAuditMemo for circuit call
+ *
+ * Bearer mode:
+ * - If bearerMode=true, leafKeyHex must be the claimer's own coinPublicKey
+ * - claimSecret is derived from the coin's private key
  *
  * Caller must:
  * - Call contract.impureCircuits.claimPayment(context, batchId, encryptedAuditMemo)
@@ -26,11 +31,16 @@ export interface ClaimFlowInput {
   /** From URL params or claim package JSON */
   batchIdHex: HexString;
   leafIndex: number;
+  leafHashHex: HexString;
   amount: bigint;
   claimSecretHex: HexString;
-  leafKeyHex: HexString;
+  leafKeyHex: HexString;  // addressed: recipient key; bearer: own coinPublicKey
   /** Merkle proof — from serialized claim package or URL param */
   serializedProof?: SerializedClaimPackage['merkleProof'];
+  /** QualifiedShieldedCoinInfo from indexer for this recipient's coin (Path A) */
+  recipientCoin?: { nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint };
+  /** Bearer mode: if true, leafKeyHex is the claimer's own coinPublicKey */
+  bearerMode?: boolean;
   /** Auditor public key — if undefined, uses EMPTY_MEMO */
   auditorPublicKey?: Uint8Array;
   /** Off-chain description for audit record */
@@ -47,14 +57,18 @@ export async function prepareClaimPayment(input: ClaimFlowInput): Promise<ClaimF
   const {
     batchIdHex,
     leafIndex,
+    leafHashHex,
     amount,
     claimSecretHex,
     leafKeyHex,
     serializedProof,
+    recipientCoin,
+    bearerMode = false,
     auditorPublicKey,
   } = input;
 
   if (!serializedProof) throw new Error('merkleProof required');
+  if (!recipientCoin) throw new Error('recipientCoin required for Path A');
 
   const batchId = fromHex(batchIdHex);
   const claimSecret = fromHex(claimSecretHex);
@@ -85,6 +99,7 @@ export async function prepareClaimPayment(input: ClaimFlowInput): Promise<ClaimF
     merkleProof,
     leafKey: { bytes: leafKey },
     claimSecret,
+    recipientCoin,
   };
 
   return { batchId, encryptedAuditMemo, privateState };
@@ -95,7 +110,7 @@ export async function prepareClaimPayment(input: ClaimFlowInput): Promise<ClaimF
  */
 export function buildClaimWitnesses(state: ClaimPrivateState) {
   return {
-    getBatchCoin: () => { throw new Error('getBatchCoin: wrong circuit'); },
+    getBatchCoin: () => state.recipientCoin,
     getMerkleRoot: () => { throw new Error('getMerkleRoot: wrong circuit'); },
     getTotalAmount: () => { throw new Error('getTotalAmount: wrong circuit'); },
     getPayerKey: () => { throw new Error('getPayerKey: wrong circuit'); },
@@ -106,6 +121,7 @@ export function buildClaimWitnesses(state: ClaimPrivateState) {
     getClaimSecret: () => state.claimSecret,
     getReclaimPayerKey: () => { throw new Error('getReclaimPayerKey: wrong circuit'); },
     getReclaimBatchNonce: () => { throw new Error('getReclaimBatchNonce: wrong circuit'); },
+    getReclaimCoin: () => { throw new Error('getReclaimCoin: wrong circuit'); },
     getRequesterKey: () => { throw new Error('getRequesterKey: wrong circuit'); },
     getRequestNonce: () => { throw new Error('getRequestNonce: wrong circuit'); },
     getMarkRequesterKey: () => { throw new Error('getMarkRequesterKey: wrong circuit'); },
@@ -123,9 +139,11 @@ export function parseClaimUrl(url: string): Omit<ClaimFlowInput, 'serializedProo
     return {
       batchIdHex: params.get('batchId')!,
       leafIndex: parseInt(params.get('leafIndex')!),
+      leafHashHex: params.get('leafHash')!,
       amount: BigInt(params.get('amount')!),
       claimSecretHex: params.get('claimSecret')!,
       leafKeyHex: params.get('leafKey')!,
+      bearerMode: params.get('bearerMode') === 'true',
     };
   } catch {
     return null;
