@@ -1,6 +1,6 @@
 {
   "contractAddress": "fd235aed0be90e04fa0a75ae5570184344edbcfd98918bafff178581389a0ebf",
-  "network": "undeployed",
+  "network": "devnet",
   "node": "http://127.0.0.1:9944",
   "indexer": "http://127.0.0.1:8088/api/v3/graphql",
   "deployedAt": "2026-05-16T13:11:28.771Z"
