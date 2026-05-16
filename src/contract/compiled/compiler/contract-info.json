@@ -21,6 +21,32 @@
             "type-name": "Uint",
             "maxval": 18446744073709551615
           }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "depositRecipientCoin",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "batchId",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        },
+        {
+          "name": "recipientLeafHash",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
         },
         {
           "name": "coin",
@@ -86,12 +112,19 @@
       }
     },
     {
-      "name": "reclaimExpiredBatch",
+      "name": "reclaimRecipientCoin",
       "pure": false,
       "proof": true,
       "arguments": [
         {
           "name": "batchId",
+          "type": {
+            "type-name": "Bytes",
+            "length": 32
+          }
+        },
+        {
+          "name": "recipientLeafHash",
           "type": {
             "type-name": "Bytes",
             "length": 32
@@ -184,6 +217,45 @@
       "result type": {
         "type-name": "Bytes",
         "length": 32
+      }
+    },
+    {
+      "name": "getBatchCoin",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Struct",
+        "name": "QualifiedShieldedCoinInfo",
+        "elements": [
+          {
+            "name": "nonce",
+            "type": {
+              "type-name": "Bytes",
+              "length": 32
+            }
+          },
+          {
+            "name": "color",
+            "type": {
+              "type-name": "Bytes",
+              "length": 32
+            }
+          },
+          {
+            "name": "value",
+            "type": {
+              "type-name": "Uint",
+              "maxval": 340282366920938463463374607431768211455
+            }
+          },
+          {
+            "name": "mt_index",
+            "type": {
+              "type-name": "Uint",
+              "maxval": 18446744073709551615
+            }
+          }
+        ]
       }
     },
     {
@@ -302,6 +374,45 @@
       }
     },
     {
+      "name": "getReclaimCoin",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Struct",
+        "name": "QualifiedShieldedCoinInfo",
+        "elements": [
+          {
+            "name": "nonce",
+            "type": {
+              "type-name": "Bytes",
+              "length": 32
+            }
+          },
+          {
+            "name": "color",
+            "type": {
+              "type-name": "Bytes",
+              "length": 32
+            }
+          },
+          {
+            "name": "value",
+            "type": {
+              "type-name": "Uint",
+              "maxval": 340282366920938463463374607431768211455
+            }
+          },
+          {
+            "name": "mt_index",
+            "type": {
+              "type-name": "Uint",
+              "maxval": 18446744073709551615
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "getRequesterKey",
       "arguments": [
       ],
@@ -360,7 +471,7 @@
   ],
   "ledger": [
     {
-      "name": "batchCoins",
+      "name": "recipientCoins",
       "index": 0,
       "exported": true,
       "storage": "Map",
@@ -431,7 +542,7 @@
       }
     },
     {
-      "name": "batchClaimedAmounts",
+      "name": "payerCommitments",
       "index": 3,
       "exported": true,
       "storage": "Map",
@@ -440,40 +551,13 @@
         "length": 32
       },
       "value": {
-        "type-name": "Uint",
-        "maxval": 340282366920938463463374607431768211455
-      }
-    },
-    {
-      "name": "payerCommitments",
-      "index": 4,
-      "exported": true,
-      "storage": "Map",
-      "key": {
         "type-name": "Bytes",
         "length": 32
-      },
-      "value": {
-        "type-name": "Bytes",
-        "length": 32
-      }
-    },
-    {
-      "name": "batchReclaimed",
-      "index": 5,
-      "exported": true,
-      "storage": "Map",
-      "key": {
-        "type-name": "Bytes",
-        "length": 32
-      },
-      "value": {
-        "type-name": "Boolean"
       }
     },
     {
       "name": "claimNullifiers",
-      "index": 6,
+      "index": 4,
       "exported": true,
       "storage": "Map",
       "key": {
@@ -486,7 +570,7 @@
     },
     {
       "name": "requestExists",
-      "index": 7,
+      "index": 5,
       "exported": true,
       "storage": "Map",
       "key": {
@@ -499,7 +583,7 @@
     },
     {
       "name": "requestStatus",
-      "index": 8,
+      "index": 6,
       "exported": true,
       "storage": "Map",
       "key": {
@@ -513,7 +597,7 @@
     },
     {
       "name": "requestDeadlines",
-      "index": 9,
+      "index": 7,
       "exported": true,
       "storage": "Map",
       "key": {
@@ -527,7 +611,7 @@
     },
     {
       "name": "requestPayeeHash",
-      "index": 10,
+      "index": 8,
       "exported": true,
       "storage": "Map",
       "key": {

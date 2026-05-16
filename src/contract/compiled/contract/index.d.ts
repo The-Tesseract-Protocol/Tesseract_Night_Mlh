@@ -5,6 +5,11 @@ export type Witnesses<PS> = {
   getPayerKey(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, { bytes: Uint8Array
                                                                           }];
   getBatchNonce(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, Uint8Array];
+  getBatchCoin(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, { nonce: Uint8Array,
+                                                                             color: Uint8Array,
+                                                                             value: bigint,
+                                                                             mt_index: bigint
+                                                                           }];
   getClaimAmount(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, bigint];
   getMerkleProof(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, { leaf: Uint8Array,
                                                                                path: { sibling: { field: bigint
@@ -18,6 +23,11 @@ export type Witnesses<PS> = {
   getReclaimPayerKey(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, { bytes: Uint8Array
                                                                                  }];
   getReclaimBatchNonce(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, Uint8Array];
+  getReclaimCoin(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, { nonce: Uint8Array,
+                                                                               color: Uint8Array,
+                                                                               value: bigint,
+                                                                               mt_index: bigint
+                                                                             }];
   getRequesterKey(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, { bytes: Uint8Array
                                                                               }];
   getRequestNonce(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, Uint8Array];
@@ -29,14 +39,20 @@ export type Witnesses<PS> = {
 export type ImpureCircuits<PS> = {
   submitBatchRoot(context: __compactRuntime.CircuitContext<PS>,
                   batchId_0: Uint8Array,
-                  deadline_0: bigint,
-                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
-                          }): __compactRuntime.CircuitResults<PS, []>;
+                  deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  depositRecipientCoin(context: __compactRuntime.CircuitContext<PS>,
+                       batchId_0: Uint8Array,
+                       recipientLeafHash_0: Uint8Array,
+                       coin_0: { nonce: Uint8Array,
+                                 color: Uint8Array,
+                                 value: bigint
+                               }): __compactRuntime.CircuitResults<PS, []>;
   claimPayment(context: __compactRuntime.CircuitContext<PS>,
                batchId_0: Uint8Array,
                encryptedAuditMemo_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
-  reclaimExpiredBatch(context: __compactRuntime.CircuitContext<PS>,
-                      batchId_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
+  reclaimRecipientCoin(context: __compactRuntime.CircuitContext<PS>,
+                       batchId_0: Uint8Array,
+                       recipientLeafHash_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
   createPaymentRequest(context: __compactRuntime.CircuitContext<PS>,
                        requestId_0: Uint8Array,
                        deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
@@ -47,14 +63,20 @@ export type ImpureCircuits<PS> = {
 export type ProvableCircuits<PS> = {
   submitBatchRoot(context: __compactRuntime.CircuitContext<PS>,
                   batchId_0: Uint8Array,
-                  deadline_0: bigint,
-                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
-                          }): __compactRuntime.CircuitResults<PS, []>;
+                  deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  depositRecipientCoin(context: __compactRuntime.CircuitContext<PS>,
+                       batchId_0: Uint8Array,
+                       recipientLeafHash_0: Uint8Array,
+                       coin_0: { nonce: Uint8Array,
+                                 color: Uint8Array,
+                                 value: bigint
+                               }): __compactRuntime.CircuitResults<PS, []>;
   claimPayment(context: __compactRuntime.CircuitContext<PS>,
                batchId_0: Uint8Array,
                encryptedAuditMemo_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
-  reclaimExpiredBatch(context: __compactRuntime.CircuitContext<PS>,
-                      batchId_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
+  reclaimRecipientCoin(context: __compactRuntime.CircuitContext<PS>,
+                       batchId_0: Uint8Array,
+                       recipientLeafHash_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
   createPaymentRequest(context: __compactRuntime.CircuitContext<PS>,
                        requestId_0: Uint8Array,
                        deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
@@ -68,14 +90,20 @@ export type PureCircuits = {
 export type Circuits<PS> = {
   submitBatchRoot(context: __compactRuntime.CircuitContext<PS>,
                   batchId_0: Uint8Array,
-                  deadline_0: bigint,
-                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
-                          }): __compactRuntime.CircuitResults<PS, []>;
+                  deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  depositRecipientCoin(context: __compactRuntime.CircuitContext<PS>,
+                       batchId_0: Uint8Array,
+                       recipientLeafHash_0: Uint8Array,
+                       coin_0: { nonce: Uint8Array,
+                                 color: Uint8Array,
+                                 value: bigint
+                               }): __compactRuntime.CircuitResults<PS, []>;
   claimPayment(context: __compactRuntime.CircuitContext<PS>,
                batchId_0: Uint8Array,
                encryptedAuditMemo_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
-  reclaimExpiredBatch(context: __compactRuntime.CircuitContext<PS>,
-                      batchId_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
+  reclaimRecipientCoin(context: __compactRuntime.CircuitContext<PS>,
+                       batchId_0: Uint8Array,
+                       recipientLeafHash_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
   createPaymentRequest(context: __compactRuntime.CircuitContext<PS>,
                        requestId_0: Uint8Array,
                        deadline_0: bigint): __compactRuntime.CircuitResults<PS, []>;
@@ -84,7 +112,7 @@ export type Circuits<PS> = {
 }
 
 export type Ledger = {
-  batchCoins: {
+  recipientCoins: {
     isEmpty(): boolean;
     size(): bigint;
     member(key_0: Uint8Array): boolean;
@@ -109,26 +137,12 @@ export type Ledger = {
     lookup(key_0: Uint8Array): bigint;
     [Symbol.iterator](): Iterator<[Uint8Array, bigint]>
   };
-  batchClaimedAmounts: {
-    isEmpty(): boolean;
-    size(): bigint;
-    member(key_0: Uint8Array): boolean;
-    lookup(key_0: Uint8Array): bigint;
-    [Symbol.iterator](): Iterator<[Uint8Array, bigint]>
-  };
   payerCommitments: {
     isEmpty(): boolean;
     size(): bigint;
     member(key_0: Uint8Array): boolean;
     lookup(key_0: Uint8Array): Uint8Array;
     [Symbol.iterator](): Iterator<[Uint8Array, Uint8Array]>
-  };
-  batchReclaimed: {
-    isEmpty(): boolean;
-    size(): bigint;
-    member(key_0: Uint8Array): boolean;
-    lookup(key_0: Uint8Array): boolean;
-    [Symbol.iterator](): Iterator<[Uint8Array, boolean]>
   };
   claimNullifiers: {
     isEmpty(): boolean;
