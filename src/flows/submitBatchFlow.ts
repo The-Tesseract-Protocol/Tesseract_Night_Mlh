@@ -100,13 +100,12 @@ export function prepareSubmitBatch(input: SubmitBatchInput): SubmitBatchOutput {
   };
 
   // Phase 2: DepositCoinInput per recipient
-  // coin values are zero-placeholder — the wallet SDK will substitute actual coin
-  // when balanceUnboundTransaction runs for depositRecipientCoin
+  // coin values need a valid random nonce for ZSwap, color is all zeros for NIGHT
   const deposits: DepositCoinInput[] = entries.map(e => ({
     batchId: batchIdBytes,
     recipientLeafHash: e.leafHash,
     coin: {
-      nonce: new Uint8Array(32),
+      nonce: randomBytes32(),
       color: new Uint8Array(32),
       value: e.amount,
     },
@@ -185,7 +184,7 @@ export function prepareSubmitBatch(input: SubmitBatchInput): SubmitBatchOutput {
 }
 
 export function isEligibleForReclaim(record: PayerRecord): boolean {
-  return Date.now() / 1000 > record.deadline;
+  return Date.now() > record.deadline;
 }
 
 export function verifyPayerCommitment(
