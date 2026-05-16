@@ -1,56 +1,51 @@
 /**
- * submitBatchFlow — Payer locks funds and commits Merkle root on-chain.
+ * submitBatchFlow — 2-phase payer flow for Path A (Pre-Split UTXO).
  *
- * Flow:
- * 1. Validate inputs
- * 2. Generate batchId (random) + batchNonce (random)
- * 3. For each recipient, generate claimSecret (random), compute leaf = hashPaymentLeaf(key, amount)
- * 4. Build Merkle tree → merkleRoot (Field)
- * 5. Compute payerCommitment hash (off-chain, for reclaim verification later)
- * 6. Return witnesses (private state) for circuit call + claim packages
+ * Phase 1: prepareSubmitBatch() → witnesses for submitBatchRoot (no coin, metadata only)
+ * Phase 2: deposits[] in return value → caller calls depositRecipientCoin per entry
  *
- * Caller must:
- * - Obtain the ShieldedCoinInfo from wallet (coin with value = sum of all amounts)
- * - Pass witnesses to contract.impureCircuits.submitBatchRoot(context, batchId, deadline)
- * - Persist claim packages to IndexedDB / distribute to recipients
+ * Bearer mode: pass bearerMode:true per recipient — claimSecret bytes used
+ * as the leaf key input instead of recipientKey.
  */
 
 import { hashPaymentLeaf, hashPayerCommit } from '../contract/descriptors.js';
 import { buildMerkleTree } from '../merkle/merkle.js';
-import {
-  Recipient,
+import type {
+  RecipientEntry,
+  DepositCoinInput,
   ClaimPackage,
-  BatchSubmitResult,
   SubmitBatchPrivateState,
   HexString,
+} from '../types/index.js';
+import {
   toHex,
   fromHex,
   randomBytes32,
   deadlineFromHours,
 } from '../types/index.js';
 
-export interface SubmitBatchFlowInput {
-  recipients: Recipient[];
+export interface SubmitBatchInput {
+  recipients: Array<{ key: string; amount: bigint; bearerMode?: boolean }>;
   deadlineHours: number;
-  payerKeyHex: HexString;  // ZswapCoinPublicKey.bytes as hex
-  coin: {
-    nonce: Uint8Array;
-    color: Uint8Array;
-    value: bigint;
-  };
-  appBaseUrl?: string; // for generating shareable links, default "/"
+  payerKeyHex: HexString;
+  appBaseUrl?: string;
 }
 
-export interface SubmitBatchFlowOutput {
-  batchId: Uint8Array;
-  batchIdHex: HexString;
-  deadline: bigint;
-  /** Public circuit parameter — pass directly to TesseractClient.submitBatch */
-  coin: { nonce: Uint8Array; color: Uint8Array; value: bigint };
-  privateState: SubmitBatchPrivateState;
-  result: BatchSubmitResult;
-  /** Persist to storage: key = batchIdHex, value = this object */
-  payerRecord: PayerRecord;
+export interface SerializedMerkleProof {
+  leaf: HexString;
+  path: Array<{ sibling: { field: string }; goes_left: boolean }>;
+}
+
+export interface SerializedClaimPackage {
+  batchId: HexString;
+  leafIndex: number;
+  leafHash: HexString;
+  amount: string;
+  claimSecret: HexString;
+  leafKey: HexString;
+  bearerMode: boolean;
+  merkleProof: SerializedMerkleProof;
+  shareableLink: string;
 }
 
 export interface PayerRecord {
@@ -59,82 +54,97 @@ export interface PayerRecord {
   batchNonceHex: HexString;
   deadline: number;
   totalAmount: string;
+  leafHashes: HexString[];
   claimPackages: SerializedClaimPackage[];
   createdAt: number;
 }
 
-export interface SerializedClaimPackage {
-  batchId: HexString;
-  leafIndex: number;
-  amount: string;       // bigint as string
-  claimSecret: HexString;
-  leafKey: HexString;
-  merkleProof: {
-    leaf: HexString;
-    path: Array<{ sibling: { field: string }; goes_left: boolean }>;
-  };
-  shareableLink: string;
+export interface SubmitBatchOutput {
+  batchId: Uint8Array;
+  batchIdHex: HexString;
+  deadline: bigint;
+  privateState: SubmitBatchPrivateState;
+  deposits: DepositCoinInput[];
+  claimPackages: ClaimPackage[];
+  payerRecord: PayerRecord;
 }
 
-export function prepareSubmitBatch(input: SubmitBatchFlowInput): SubmitBatchFlowOutput {
-  const { recipients, deadlineHours, payerKeyHex, coin, appBaseUrl = '/' } = input;
+export function prepareSubmitBatch(input: SubmitBatchInput): SubmitBatchOutput {
+  const { recipients, deadlineHours, payerKeyHex, appBaseUrl = '/' } = input;
 
   if (recipients.length === 0) throw new Error('No recipients');
   if (recipients.length > 65536) throw new Error('Max 65536 recipients');
-
-  const totalAmount = recipients.reduce((sum, r) => sum + r.amount, 0n);
-  if (coin.value !== totalAmount) {
-    throw new Error(`Coin value ${coin.value} != sum of amounts ${totalAmount}`);
-  }
 
   // Generate batch identifiers
   const batchIdBytes = randomBytes32();
   const batchNonceBytes = randomBytes32();
   const batchIdHex = toHex(batchIdBytes);
-  const batchNonceHex = toHex(batchNonceBytes);
   const deadline = deadlineFromHours(deadlineHours);
   const payerKeyBytes = fromHex(payerKeyHex);
 
-  // Build leaves: one per recipient with unique claimSecret
-  const claimSecrets: Uint8Array[] = [];
-  const leafBytes: Uint8Array[] = [];
-
-  for (const recipient of recipients) {
-    const recipientKeyBytes = fromHex(recipient.key);
+  // Build entries
+  const entries: RecipientEntry[] = recipients.map(r => {
     const claimSecret = randomBytes32();
-    claimSecrets.push(claimSecret);
+    const bearerMode = r.bearerMode ?? false;
+    const leafKeyInput = bearerMode ? claimSecret : fromHex(r.key);
+    const leafHash = hashPaymentLeaf({ bytes: leafKeyInput }, r.amount);
+    return { key: r.key, amount: r.amount, leafHash, claimSecret, bearerMode };
+  });
 
-    const leaf = hashPaymentLeaf({ bytes: recipientKeyBytes }, recipient.amount);
-    leafBytes.push(leaf);
-  }
+  const { root: merkleRoot, proofs } = buildMerkleTree(entries.map(e => e.leafHash));
 
-  // Build Merkle tree
-  const { root: merkleRoot, proofs } = buildMerkleTree(leafBytes);
+  const privateState: SubmitBatchPrivateState = {
+    merkleRoot,
+    payerKey: { bytes: payerKeyBytes },
+    batchNonce: batchNonceBytes,
+  };
 
-  // Build claim packages
+  // Phase 2: DepositCoinInput per recipient
+  // coin values are zero-placeholder — the wallet SDK will substitute actual coin
+  // when balanceUnboundTransaction runs for depositRecipientCoin
+  const deposits: DepositCoinInput[] = entries.map(e => ({
+    batchId: batchIdBytes,
+    recipientLeafHash: e.leafHash,
+    coin: {
+      nonce: new Uint8Array(32),
+      color: new Uint8Array(32),
+      value: e.amount,
+    },
+  }));
+
   const claimPackages: ClaimPackage[] = [];
   const serializedPackages: SerializedClaimPackage[] = [];
 
-  for (let i = 0; i < recipients.length; i++) {
-    const recipient = recipients[i];
-    const claimSecretHex = toHex(claimSecrets[i]);
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
     const proof = proofs[i];
+    const leafKeyForLink = entry.bearerMode ? toHex(entry.claimSecret) : entry.key;
 
     const params = new URLSearchParams({
       batchId: batchIdHex,
       leafIndex: i.toString(),
-      amount: recipient.amount.toString(),
-      claimSecret: claimSecretHex,
-      leafKey: recipient.key,
+      leafHash: toHex(entry.leafHash),
+      amount: entry.amount.toString(),
+      claimSecret: toHex(entry.claimSecret),
+      leafKey: leafKeyForLink,
+      bearer: entry.bearerMode ? '1' : '0',
     });
     const shareableLink = `${appBaseUrl}claim?${params.toString()}`;
+
+    const serializedProof: SerializedMerkleProof = {
+      leaf: toHex(proof.leaf),
+      path: proof.path.map((n: any) => ({
+        sibling: { field: n.sibling.field.toString() },
+        goes_left: n.goes_left,
+      })),
+    };
 
     claimPackages.push({
       batchId: batchIdHex,
       leafIndex: i,
-      amount: recipient.amount,
-      claimSecret: claimSecretHex,
-      leafKey: recipient.key,
+      amount: entry.amount,
+      claimSecret: toHex(entry.claimSecret),
+      leafKey: leafKeyForLink,
       merkleProof: proof,
       shareableLink,
     });
@@ -142,33 +152,23 @@ export function prepareSubmitBatch(input: SubmitBatchFlowInput): SubmitBatchFlow
     serializedPackages.push({
       batchId: batchIdHex,
       leafIndex: i,
-      amount: recipient.amount.toString(),
-      claimSecret: claimSecretHex,
-      leafKey: recipient.key,
-      merkleProof: {
-        leaf: toHex(proof.leaf),
-        path: proof.path.map(e => ({
-          sibling: { field: e.sibling.field.toString() },
-          goes_left: e.goes_left,
-        })),
-      },
+      leafHash: toHex(entry.leafHash),
+      amount: entry.amount.toString(),
+      claimSecret: toHex(entry.claimSecret),
+      leafKey: leafKeyForLink,
+      bearerMode: entry.bearerMode,
+      merkleProof: serializedProof,
       shareableLink,
     });
   }
 
-  // Witness-only private state (coin is a public circuit parameter, not a witness)
-  const privateState: SubmitBatchPrivateState = {
-    merkleRoot,
-    payerKey: { bytes: payerKeyBytes },
-    batchNonce: batchNonceBytes,
-  };
-
   const payerRecord: PayerRecord = {
     batchIdHex,
     payerKeyHex,
-    batchNonceHex,
+    batchNonceHex: toHex(batchNonceBytes),
     deadline: Number(deadline),
-    totalAmount: totalAmount.toString(),
+    totalAmount: entries.reduce((s, e) => s + e.amount, 0n).toString(),
+    leafHashes: entries.map(e => toHex(e.leafHash)),
     claimPackages: serializedPackages,
     createdAt: Date.now(),
   };
@@ -177,45 +177,17 @@ export function prepareSubmitBatch(input: SubmitBatchFlowInput): SubmitBatchFlow
     batchId: batchIdBytes,
     batchIdHex,
     deadline,
-    coin,
     privateState,
-    result: {
-      batchId: batchIdHex,
-      merkleRoot,
-      totalAmount,
-      claimPackages,
-      deadline,
-    },
+    deposits,
+    claimPackages,
     payerRecord,
   };
 }
 
-/**
- * Build the witnesses object for the submitBatchRoot circuit.
- * Pass this as the Contract constructor argument.
- */
-export function buildSubmitBatchWitnesses(state: SubmitBatchPrivateState) {
-  return {
-    getBatchCoin: () => state.coin,
-    getMerkleRoot: () => state.merkleRoot,
-    getTotalAmount: () => state.totalAmount,
-    getPayerKey: () => state.payerKey,
-    getBatchNonce: () => state.batchNonce,
-    // Unused witnesses for other circuits — provide stubs
-    getClaimAmount: () => { throw new Error('getClaimAmount: wrong circuit'); },
-    getMerkleProof: () => { throw new Error('getMerkleProof: wrong circuit'); },
-    getLeafKey: () => { throw new Error('getLeafKey: wrong circuit'); },
-    getClaimSecret: () => { throw new Error('getClaimSecret: wrong circuit'); },
-    getReclaimPayerKey: () => { throw new Error('getReclaimPayerKey: wrong circuit'); },
-    getReclaimBatchNonce: () => { throw new Error('getReclaimBatchNonce: wrong circuit'); },
-    getRequesterKey: () => { throw new Error('getRequesterKey: wrong circuit'); },
-    getRequestNonce: () => { throw new Error('getRequestNonce: wrong circuit'); },
-    getMarkRequesterKey: () => { throw new Error('getMarkRequesterKey: wrong circuit'); },
-    getMarkRequestNonce: () => { throw new Error('getMarkRequestNonce: wrong circuit'); },
-  };
+export function isEligibleForReclaim(record: PayerRecord): boolean {
+  return Date.now() / 1000 > record.deadline;
 }
 
-/** Verify payer commitment matches what's stored on-chain (for reclaim eligibility) */
 export function verifyPayerCommitment(
   payerKeyHex: HexString,
   batchNonceHex: HexString,
@@ -224,5 +196,5 @@ export function verifyPayerCommitment(
   const payerKeyBytes = fromHex(payerKeyHex);
   const batchNonceBytes = fromHex(batchNonceHex);
   const computed = hashPayerCommit({ bytes: payerKeyBytes }, batchNonceBytes);
-  return computed.every((b, i) => b === storedCommitment[i]);
+  return computed.every((b: number, i: number) => b === storedCommitment[i]);
 }
