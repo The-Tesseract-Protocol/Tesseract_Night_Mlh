@@ -41,15 +41,23 @@ export interface AuditEntry {
 
 // ── Hook signatures ───────────────────────────────────────────────────────────
 
+export type GetRecipientCoinFn = (
+  batchIdHex: string,
+  leafHashHex: string,
+) => Promise<{ nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint } | null>;
+
 export interface UseClaimReturn {
   /** Parse claim params from current URL (window.location.href) */
   parseCurrentUrl: () => ClaimParams | null;
-  /** Execute claim circuit */
+  /** Execute claim circuit — requires merkleProof present in params */
   claim: (params: ClaimParams) => Promise<ClaimResult>;
   isLoading: boolean;
   error: string | null;
   clearError: () => void;
 }
+
+// useClaim(callCircuit, auditorPublicKeyHex?, getRecipientCoin?)
+// getRecipientCoin = TesseractClient.getRecipientCoin.bind(client) or equivalent
 
 export interface UseAuditDecryptReturn {
   /** Decrypt all audit memos with auditor private key */
