@@ -332,191 +332,157 @@ async function waitSync(facade: WalletFacade, name: string) {
 
 // ── Integration Test ──────────────────────────────────────────────────────────
 
-log.info('=== GATE-3 Integration Test ===');
+log.info('=== GATE-3 Integration Test — Path A ===');
 log.info(`Contract: ${DEPLOYED_ADDRESS}`);
 
-// Build wallets — genesis is payer (has shielded NIGHT), Bob + Carol are recipients
-log.info('\nBuilding wallets...');
 const genesis = await buildWalletFromHexSeed(GENESIS_SEED_HEX);
-const bob = await buildWalletFromMnemonic(BOB_MNEMONIC);
-const carol = await buildWalletFromMnemonic(CAROL_MNEMONIC);
+const bob     = await buildWalletFromMnemonic(BOB_MNEMONIC);
+const carol   = await buildWalletFromMnemonic(CAROL_MNEMONIC);
 
 await Promise.all([
   waitSync(genesis.facade, 'Genesis'),
-  waitSync(bob.facade, 'Bob'),
-  waitSync(carol.facade, 'Carol'),
+  waitSync(bob.facade,     'Bob'),
+  waitSync(carol.facade,   'Carol'),
 ]);
 
 const genesisSyncedState = await genesis.facade.waitForSyncedState();
-const genesisBalance = genesisSyncedState.shielded.balances;
-log.info(`Genesis shielded balance: ${Object.entries(genesisBalance).map(([k,v]) => `${k}:${v}`).join(', ')}`);
+log.info(`Genesis shielded balance: ${JSON.stringify(genesisSyncedState.shielded.balances)}`);
 
-// CoinPublicKey is a string in ledger-v8; use encodeCoinPublicKey to get bytes
-const bobKey = toHex(encodeCoinPublicKey(bob.shieldedSecretKeys.coinPublicKey));
-const carolKey = toHex(encodeCoinPublicKey(carol.shieldedSecretKeys.coinPublicKey));
+const genesisKeyHex = toHex(encodeCoinPublicKey(genesis.shieldedSecretKeys.coinPublicKey));
+const bobKey        = toHex(encodeCoinPublicKey(bob.shieldedSecretKeys.coinPublicKey));
+const carolKey      = toHex(encodeCoinPublicKey(carol.shieldedSecretKeys.coinPublicKey));
 log.info(`Bob key:   ${bobKey}`);
 log.info(`Carol key: ${carolKey}`);
 
-// ── Step 1: Genesis picks a coin for batch payment ─────────────────────────
+// ── Step 1: Prepare batch (no coin needed for Phase 1) ─────────────────────
+log.info('\n[STEP 1] Preparing batch...');
 
-log.info('\n[STEP 1] Finding genesis coin for batch...');
+const BATCH_AMOUNT_BOB   = 100_000_000n;
+const BATCH_AMOUNT_CAROL = 150_000_000n;
 
-const availableCoins = genesisSyncedState.shielded.availableCoins;
-log.info(`Genesis has ${availableCoins.length} available shielded coin(s)`);
-
-if (availableCoins.length === 0) {
-  log.error('Genesis has no available shielded coins. Chain may need more blocks.');
-  process.exit(1);
-}
-
-// Pick smallest coin — amounts must sum to EXACTLY coin.value (circuit asserts this)
-const useCoin = availableCoins.reduce((a, b) => a.coin.value <= b.coin.value ? a : b);
-const encodedCoin = encodeShieldedCoinInfo(useCoin.coin);
-const TOTAL_AMOUNT = useCoin.coin.value;
-// Split 40/60
-const BATCH_AMOUNT_BOB = (TOTAL_AMOUNT * 40n) / 100n;
-const BATCH_AMOUNT_CAROL = TOTAL_AMOUNT - BATCH_AMOUNT_BOB;
-
-log.info(`Using coin: value=${TOTAL_AMOUNT} (Bob=${BATCH_AMOUNT_BOB}, Carol=${BATCH_AMOUNT_CAROL})`);
-
-const genesisKeyHex = toHex(encodeCoinPublicKey(genesis.shieldedSecretKeys.coinPublicKey));
-
-// ── Step 2: Alice prepares + submits batch ─────────────────────────────────
-
-log.info('\n[STEP 2] Genesis prepares batch...');
 const batchPrep = prepareSubmitBatch({
   recipients: [
-    { key: bobKey, amount: BATCH_AMOUNT_BOB },
-    { key: carolKey, amount: BATCH_AMOUNT_CAROL },
+    { key: bobKey,   amount: BATCH_AMOUNT_BOB   },
+    { key: carolKey, amount: BATCH_AMOUNT_CAROL  },
   ],
   deadlineHours: 72,
   payerKeyHex: genesisKeyHex,
-  coin: {
-    nonce: encodedCoin.nonce,
-    color: encodedCoin.color,
-    value: useCoin.coin.value,  // full coin value — circuit locks total amount internally
-  },
   appBaseUrl: 'http://localhost:5173/',
 });
 
 log.info(`Batch ID:    ${batchPrep.batchIdHex}`);
 log.info(`Merkle root: ${batchPrep.privateState.merkleRoot}`);
-log.info(`Deadline:    ${batchPrep.deadline}`);
 
 const genesisProviders = buildProviders(genesis);
-const genesisClient = await TesseractClient.connect(genesisProviders, DEPLOYED_ADDRESS, COMPILED_DIR);
+const genesisClient    = await TesseractClient.connect(genesisProviders, DEPLOYED_ADDRESS, COMPILED_DIR);
 
-log.info('Genesis submitting batch...');
+// ── Step 2: Phase 1 — submitBatchRoot (no coin param) ─────────────────────
+log.info('\n[STEP 2] Submitting batch root...');
 const submitTxHash = await genesisClient.submitBatch(
   batchPrep.batchId,
   batchPrep.deadline,
-  batchPrep.coin,
   batchPrep.privateState,
 );
 log.info(`✅ submitBatchRoot TX: ${submitTxHash}`);
+await pollForTx(submitTxHash);
 
-// ── Step 3: Bob claims ─────────────────────────────────────────────────────
-
-log.info('\n[STEP 3] Bob claims payment...');
-const bobClaim = batchPrep.result.claimPackages[0];
-const bobClaimPrep = await prepareClaimPayment({
-  batchIdHex: bobClaim.batchId,
-  leafIndex: bobClaim.leafIndex,
-  amount: bobClaim.amount,
-  claimSecretHex: bobClaim.claimSecret,
-  leafKeyHex: bobClaim.leafKey,
-  serializedProof: {
-    leaf: toHex(bobClaim.merkleProof.leaf),
-    path: bobClaim.merkleProof.path.map(e => ({
-      sibling: { field: e.sibling.field.toString() },
-      goes_left: e.goes_left,
-    })),
-  },
-});
-
-const bobProviders = buildProviders(bob);
-const bobClient = await TesseractClient.connect(bobProviders, DEPLOYED_ADDRESS, COMPILED_DIR);
-
-const bobClaimTx = await bobClient.claimPayment(
-  bobClaimPrep.batchId,
-  bobClaimPrep.encryptedAuditMemo,
-  bobClaimPrep.privateState,
-);
-log.info(`✅ claimPayment (Bob) TX: ${bobClaimTx}`);
-
-// ── Step 4: Carol claims ───────────────────────────────────────────────────
-
-log.info('\n[STEP 4] Carol claims payment...');
-const carolClaim = batchPrep.result.claimPackages[1];
-const carolClaimPrep = await prepareClaimPayment({
-  batchIdHex: carolClaim.batchId,
-  leafIndex: carolClaim.leafIndex,
-  amount: carolClaim.amount,
-  claimSecretHex: carolClaim.claimSecret,
-  leafKeyHex: carolClaim.leafKey,
-  serializedProof: {
-    leaf: toHex(carolClaim.merkleProof.leaf),
-    path: carolClaim.merkleProof.path.map(e => ({
-      sibling: { field: e.sibling.field.toString() },
-      goes_left: e.goes_left,
-    })),
-  },
-});
-
-const carolProviders = buildProviders(carol);
-const carolClient = await TesseractClient.connect(carolProviders, DEPLOYED_ADDRESS, COMPILED_DIR);
-
-const carolClaimTx = await carolClient.claimPayment(
-  carolClaimPrep.batchId,
-  carolClaimPrep.encryptedAuditMemo,
-  carolClaimPrep.privateState,
-);
-log.info(`✅ claimPayment (Carol) TX: ${carolClaimTx}`);
-
-// ── Step 5: Double-spend check (Bob tries to claim again) ──────────────────
-
-log.info('\n[STEP 5] Double-spend check — Bob tries to claim again (expect rejection)...');
-let doubleSpendRejected = false;
-try {
-  await bobClient.claimPayment(
-    bobClaimPrep.batchId,
-    bobClaimPrep.encryptedAuditMemo,
-    bobClaimPrep.privateState,
+// ── Step 3: Phase 2 — depositRecipientCoin (sequential, one per recipient) ─
+log.info('\n[STEP 3] Depositing per-recipient coins...');
+for (let i = 0; i < batchPrep.deposits.length; i++) {
+  const dep = batchPrep.deposits[i];
+  log.info(`  Depositing for recipient ${i + 1}/${batchPrep.deposits.length}, amount=${dep.coin.value}...`);
+  const depTxHash = await genesisClient.depositCoin(
+    dep.batchId,
+    dep.recipientLeafHash,
+    dep.coin,
   );
-  log.error('DOUBLE SPEND NOT REJECTED — CONTRACT BUG');
-} catch (err: any) {
-  doubleSpendRejected = true;
-  log.info(`✅ Double-spend rejected: ${err?.message?.slice(0, 80) ?? err}`);
+  log.info(`  ✅ deposit TX: ${depTxHash}`);
+  await pollForTx(depTxHash);
 }
 
-// ── Summary ────────────────────────────────────────────────────────────────
+// ── Step 4: Fetch recipient coins from indexer ────────────────────────────
+log.info('\n[STEP 4] Fetching recipient coins from indexer...');
 
-log.info('\n=== GATE-3 RESULTS ===');
-log.info(`submitBatchRoot:   ✅ ${submitTxHash}`);
-log.info(`claimPayment Bob:  ✅ ${bobClaimTx}`);
-log.info(`claimPayment Carol:✅ ${carolClaimTx}`);
-log.info(`Double-spend check:${doubleSpendRejected ? '✅ REJECTED' : '❌ NOT REJECTED'}`);
+const bobPkg   = batchPrep.claimPackages[0];
+const carolPkg = batchPrep.claimPackages[1];
 
-if (!doubleSpendRejected) {
-  log.error('GATE-3 FAILED: double-spend not rejected');
+const bobLeafHash   = fromHex(batchPrep.payerRecord.leafHashes[0]);
+const carolLeafHash = fromHex(batchPrep.payerRecord.leafHashes[1]);
+
+let bobCoin = await genesisClient.getRecipientCoin(batchPrep.batchId, bobLeafHash);
+let carolCoin = await genesisClient.getRecipientCoin(batchPrep.batchId, carolLeafHash);
+
+for (let attempt = 0; attempt < 3 && (!bobCoin || !carolCoin); attempt++) {
+  await new Promise(r => setTimeout(r, 2000));
+  if (!bobCoin)   bobCoin   = await genesisClient.getRecipientCoin(batchPrep.batchId, bobLeafHash);
+  if (!carolCoin) carolCoin = await genesisClient.getRecipientCoin(batchPrep.batchId, carolLeafHash);
+}
+if (!bobCoin)   throw new Error('Bob coin not found in indexer after retries');
+if (!carolCoin) throw new Error('Carol coin not found in indexer after retries');
+log.info(`Bob coin:   value=${bobCoin.value}, mt_index=${bobCoin.mt_index}`);
+log.info(`Carol coin: value=${carolCoin.value}, mt_index=${carolCoin.mt_index}`);
+
+// ── Step 5: Parallel claims ──────────────────────────────────────────────
+log.info('\n[STEP 5] Bob + Carol claim IN PARALLEL...');
+
+const bobProviders   = buildProviders(bob);
+const carolProviders = buildProviders(carol);
+const bobClient      = await TesseractClient.connect(bobProviders,   DEPLOYED_ADDRESS, COMPILED_DIR);
+const carolClient    = await TesseractClient.connect(carolProviders, DEPLOYED_ADDRESS, COMPILED_DIR);
+
+const bobClaimPrep = await prepareClaimPayment({
+  batchIdHex:     bobPkg.batchId,
+  leafIndex:      bobPkg.leafIndex,
+  leafHashHex:    batchPrep.payerRecord.leafHashes[0],
+  amount:         bobPkg.amount,
+  claimSecretHex: bobPkg.claimSecret,
+  leafKeyHex:     bobPkg.leafKey,
+  serializedProof: {
+    leaf: toHex(bobPkg.merkleProof.leaf),
+    path: bobPkg.merkleProof.path.map(e => ({
+      sibling: { field: e.sibling.field.toString() },
+      goes_left: e.goes_left,
+    })),
+  },
+  recipientCoin: bobCoin,
+});
+
+const carolClaimPrep = await prepareClaimPayment({
+  batchIdHex:     carolPkg.batchId,
+  leafIndex:      carolPkg.leafIndex,
+  leafHashHex:    batchPrep.payerRecord.leafHashes[1],
+  amount:         carolPkg.amount,
+  claimSecretHex: carolPkg.claimSecret,
+  leafKeyHex:     carolPkg.leafKey,
+  serializedProof: {
+    leaf: toHex(carolPkg.merkleProof.leaf),
+    path: carolPkg.merkleProof.path.map(e => ({
+      sibling: { field: e.sibling.field.toString() },
+      goes_left: e.goes_left,
+    })),
+  },
+  recipientCoin: carolCoin,
+});
+
+const [bobTxHash, carolTxHash] = await Promise.all([
+  bobClient.claimPayment(bobClaimPrep.batchId, bobClaimPrep.encryptedAuditMemo, bobClaimPrep.privateState),
+  carolClient.claimPayment(carolClaimPrep.batchId, carolClaimPrep.encryptedAuditMemo, carolClaimPrep.privateState),
+]);
+
+log.info(`✅ Bob claimed:   ${bobTxHash}`);
+log.info(`✅ Carol claimed: ${carolTxHash}`);
+
+await Promise.all([pollForTx(bobTxHash), pollForTx(carolTxHash)]);
+log.info('\n✅ GATE-3 PASSED — parallel claims succeeded (Path A, no Error 186)');
+
+// ── Step 6: Double-spend rejected ────────────────────────────────────────
+log.info('\n[STEP 6] Double-spend guard test (Bob re-claim should fail)...');
+try {
+  await bobClient.claimPayment(bobClaimPrep.batchId, bobClaimPrep.encryptedAuditMemo, bobClaimPrep.privateState);
+  log.error('❌ FAIL: double-spend was NOT rejected');
   process.exit(1);
+} catch (e) {
+  log.info(`✅ Double-spend correctly rejected: ${(e as Error).message}`);
 }
-
-// Write GATE-3 artifact
-const gate3 = {
-  gate: 'GATE-3',
-  status: 'PASSED',
-  contractAddress: DEPLOYED_ADDRESS,
-  submitBatchRoot: { txHash: submitTxHash, batchId: batchPrep.batchIdHex },
-  claims: [
-    { recipient: 'Bob', txHash: bobClaimTx, amount: BATCH_AMOUNT_BOB.toString() },
-    { recipient: 'Carol', txHash: carolClaimTx, amount: BATCH_AMOUNT_CAROL.toString() },
-  ],
-  doubleSpendRejected,
-  passedAt: new Date().toISOString(),
-};
-const gateFile = path.resolve(PROJECT_ROOT, 'agents', 'interfaces', 'GATE-3-integration.json');
-fs.writeFileSync(gateFile, JSON.stringify(gate3, null, 2));
-log.info(`\n✅ GATE-3 PASSED — saved to ${gateFile}`);
 
 process.exit(0);
