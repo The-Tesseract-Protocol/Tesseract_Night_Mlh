@@ -8,13 +8,10 @@
  *   const txHash = await client.submitBatch(batchId, deadline, submitPrivateState);
  */
 
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
-import { SucceedEntirely } from '@midnight-ntwrk/midnight-js-types';
 import type { MidnightProviders, PrivateStateId } from '@midnight-ntwrk/midnight-js-types';
-import { Contract } from './compiled/contract/index.js';
+import { Contract, ledger as getLedger } from './compiled/contract/index.js';
 import type { Witnesses } from './compiled/contract/index.js';
 import type {
   SubmitBatchPrivateState, ClaimPrivateState, ReclaimPrivateState,
@@ -34,38 +31,50 @@ type PendingWitnessState = {
 
 function makeWitnesses(pending: PendingWitnessState): Witnesses<undefined> {
   return {
-    getMerkleRoot:       () => [undefined, pending.submit!.merkleRoot] as any,
-    getPayerKey:         () => [undefined, pending.submit!.payerKey] as any,
-    getBatchNonce:       () => [undefined, pending.submit!.batchNonce] as any,
-    getBatchCoin:        () => {
-      if (pending.claim)   return [undefined, pending.claim.recipientCoin] as any;
-      if (pending.reclaim) return [undefined, pending.reclaim.reclaimCoin] as any;
+    getMerkleRoot:       (ctx: any) => [ctx.privateState, pending.submit!.merkleRoot] as any,
+    getPayerKey:         (ctx: any) => [ctx.privateState, pending.submit!.payerKey] as any,
+    getBatchNonce:       (ctx: any) => [ctx.privateState, pending.submit!.batchNonce] as any,
+    getBatchCoin:        (ctx: any) => {
+      if (pending.claim)   return [ctx.privateState, pending.claim.recipientCoin] as any;
+      if (pending.reclaim) return [ctx.privateState, pending.reclaim.reclaimCoin] as any;
       throw new Error('getBatchCoin: no active claim or reclaim state');
     },
-    getClaimAmount:      () => [undefined, pending.claim!.claimAmount] as any,
-    getMerkleProof:      () => [undefined, pending.claim!.merkleProof] as any,
-    getLeafKey:          () => [undefined, pending.claim!.leafKey] as any,
-    getClaimSecret:      () => [undefined, pending.claim!.claimSecret] as any,
-    getReclaimPayerKey:  () => [undefined, pending.reclaim!.payerKey] as any,
-    getReclaimBatchNonce:() => [undefined, pending.reclaim!.batchNonce] as any,
-    getReclaimCoin:      () => [undefined, pending.reclaim!.reclaimCoin] as any,
-    getRequesterKey:     () => [undefined, pending.request!.requesterKey] as any,
-    getRequestNonce:     () => [undefined, pending.request!.requestNonce] as any,
-    getMarkRequesterKey: () => [undefined, pending.markPaid!.requesterKey] as any,
-    getMarkRequestNonce: () => [undefined, pending.markPaid!.requestNonce] as any,
+    getClaimAmount:      (ctx: any) => [ctx.privateState, pending.claim!.claimAmount] as any,
+    getMerkleProof:      (ctx: any) => [ctx.privateState, pending.claim!.merkleProof] as any,
+    getLeafKey:          (ctx: any) => [ctx.privateState, pending.claim!.leafKey] as any,
+    getClaimSecret:      (ctx: any) => [ctx.privateState, pending.claim!.claimSecret] as any,
+    getReclaimPayerKey:  (ctx: any) => [ctx.privateState, pending.reclaim!.payerKey] as any,
+    getReclaimBatchNonce:(ctx: any) => [ctx.privateState, pending.reclaim!.batchNonce] as any,
+    getReclaimCoin:      (ctx: any) => [ctx.privateState, pending.reclaim!.reclaimCoin] as any,
+    getRequesterKey:     (ctx: any) => [ctx.privateState, pending.request!.requesterKey] as any,
+    getRequestNonce:     (ctx: any) => [ctx.privateState, pending.request!.requestNonce] as any,
+    getMarkRequesterKey: (ctx: any) => [ctx.privateState, pending.markPaid!.requesterKey] as any,
+    getMarkRequestNonce: (ctx: any) => [ctx.privateState, pending.markPaid!.requestNonce] as any,
   };
 }
 
 const PRIVATE_STATE_ID = 'tesseract-core';
 
 export class TesseractClient {
+  private readonly callTx: Awaited<ReturnType<typeof findDeployedContract>>['callTx'];
+  private readonly publicDataProvider: MidnightProviders<string, PrivateStateId, undefined>['publicDataProvider'];
+  private readonly pending: PendingWitnessState;
+  readonly compiledContract: any;
+  readonly contractAddress: string;
+
   private constructor(
-    private readonly callTx: Awaited<ReturnType<typeof findDeployedContract>>['callTx'],
-    private readonly publicDataProvider: MidnightProviders<string, PrivateStateId, undefined>['publicDataProvider'],
-    private readonly pending: PendingWitnessState,
-    public readonly compiledContract: any,
-    public readonly contractAddress: string,
-  ) {}
+    callTx: Awaited<ReturnType<typeof findDeployedContract>>['callTx'],
+    publicDataProvider: MidnightProviders<string, PrivateStateId, undefined>['publicDataProvider'],
+    pending: PendingWitnessState,
+    compiledContract: any,
+    contractAddress: string,
+  ) {
+    this.callTx = callTx;
+    this.publicDataProvider = publicDataProvider;
+    this.pending = pending;
+    this.compiledContract = compiledContract;
+    this.contractAddress = contractAddress;
+  }
 
   static async connect(
     providers: MidnightProviders<string, PrivateStateId, undefined>,
@@ -86,7 +95,14 @@ export class TesseractClient {
       privateStateId: PRIVATE_STATE_ID as PrivateStateId,
       initialPrivateState: {} as any,
     });
-    return new TesseractClient(found.callTx as any, providers.publicDataProvider, pending, compiledContract, contractAddress);
+
+    // Ensure the private state exists, otherwise calls will fail
+    const currentState = await providers.privateStateProvider.get(PRIVATE_STATE_ID as PrivateStateId);
+    if (!currentState) {
+      await providers.privateStateProvider.set(PRIVATE_STATE_ID as PrivateStateId, {} as any);
+    }
+
+    return new TesseractClient(found.callTx, providers.publicDataProvider, pending, compiledContract, contractAddress);
   }
 
   // Phase 1: metadata only, no coin
@@ -142,7 +158,7 @@ export class TesseractClient {
   ): Promise<{ nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint } | null> {
     const state = await this.publicDataProvider.queryContractState(this.contractAddress);
     if (!state) return null;
-    const ledger = this.compiledContract.ledger(state);
+    const ledger = getLedger(state.data);
     const coinKey = hashCoinKey(batchId, leafHash);
     if (ledger.recipientCoins.member(coinKey)) {
       return ledger.recipientCoins.lookup(coinKey);

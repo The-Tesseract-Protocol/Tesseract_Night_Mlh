@@ -26,7 +26,7 @@ class _PayerCommitInputType {
   alignment() {
     return ZswapCoinPublicKeyDescriptor.alignment().concat(Bytes32.alignment());
   }
-  fromValue(v: ReturnType<typeof ZswapCoinPublicKeyDescriptor.fromValue & object>): never {
+  fromValue(_v: ReturnType<typeof ZswapCoinPublicKeyDescriptor.fromValue & object>): never {
     throw new Error('fromValue not needed');
   }
   toValue(v: { payerKey: { bytes: Uint8Array }; batchNonce: Uint8Array }) {
