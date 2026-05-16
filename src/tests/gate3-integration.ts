@@ -222,7 +222,7 @@ function buildProviders(wallet: { facade: WalletFacade; shieldedSecretKeys: ledg
         return ContractState.deserialize(fromHex(hexState));
       },
       async queryZSwapAndContractState(contractAddress: string) {
-        const data = await gqlFetch(`{ contractAction(address: "${contractAddress}") { state zswapState } }`);
+        const data = await gqlFetch(`{ contractAction(address: "${contractAddress}") { ... on ContractDeploy { state zswapState } ... on ContractCall { state zswapState } } }`);
         const action = (data as any).contractAction;
         if (!action?.state || !action?.zswapState) return null;
         return [
@@ -346,7 +346,7 @@ await Promise.all([
 ]);
 
 const genesisSyncedState = await genesis.facade.waitForSyncedState();
-log.info(`Genesis shielded balance: ${JSON.stringify(genesisSyncedState.shielded.balances)}`);
+log.info(`Genesis shielded balance: ${Object.entries(genesisSyncedState.shielded.balances).map(([k, v]) => `${k}:${v}`).join(', ')}`);
 
 const genesisKeyHex = toHex(encodeCoinPublicKey(genesis.shieldedSecretKeys.coinPublicKey));
 const bobKey        = toHex(encodeCoinPublicKey(bob.shieldedSecretKeys.coinPublicKey));

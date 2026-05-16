@@ -76,7 +76,7 @@ export function buildMerkleTree(leaves: Uint8Array[]): MerkleTreeResult {
       const sibling = levels[d][siblingIdx];
       path.push({
         sibling: { field: sibling },
-        goes_left: !isLeft, // goes_left = true means this node is RIGHT, sibling is LEFT
+        goes_left: isLeft, // goes_left = true means this node is the LEFT child (matches circuit _merkleTreePathEntryRoot_0)
       });
       idx = Math.floor(idx / 2);
     }
@@ -96,8 +96,8 @@ export function buildMerkleTree(leaves: Uint8Array[]): MerkleTreeResult {
 export function verifyMerkleProof(proof: MerkleTreePath<Uint8Array>, root: bigint): boolean {
   let current = leafToField(proof.leaf);
   for (const entry of proof.path) {
-    const left = entry.goes_left ? entry.sibling.field : current;
-    const right = entry.goes_left ? current : entry.sibling.field;
+    const left = entry.goes_left ? current : entry.sibling.field;
+    const right = entry.goes_left ? entry.sibling.field : current;
     current = merkleInternalHash(left, right);
   }
   return current === root;

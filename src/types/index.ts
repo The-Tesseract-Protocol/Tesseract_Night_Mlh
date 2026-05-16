@@ -147,5 +147,5 @@ export function randomBytes32(): Uint8Array {
 }
 
 export function deadlineFromHours(hours: number): bigint {
-  return BigInt(Math.floor(Date.now() / 1000) + hours * 3600);
+  return BigInt(Date.now() + hours * 3600 * 1000);
 }
