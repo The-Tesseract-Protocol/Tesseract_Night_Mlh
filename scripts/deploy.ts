@@ -204,7 +204,6 @@ async function buildWallet() {
 const deployWitnesses: Witnesses<undefined> = {
   getBatchCoin: () => { throw new Error('not called during deploy'); },
   getMerkleRoot: () => { throw new Error('not called during deploy'); },
-  getTotalAmount: () => { throw new Error('not called during deploy'); },
   getPayerKey: () => { throw new Error('not called during deploy'); },
   getBatchNonce: () => { throw new Error('not called during deploy'); },
   getClaimAmount: () => { throw new Error('not called during deploy'); },
@@ -213,6 +212,7 @@ const deployWitnesses: Witnesses<undefined> = {
   getClaimSecret: () => { throw new Error('not called during deploy'); },
   getReclaimPayerKey: () => { throw new Error('not called during deploy'); },
   getReclaimBatchNonce: () => { throw new Error('not called during deploy'); },
+  getReclaimCoin: () => { throw new Error('not called during deploy'); },
   getRequesterKey: () => { throw new Error('not called during deploy'); },
   getRequestNonce: () => { throw new Error('not called during deploy'); },
   getMarkRequesterKey: () => { throw new Error('not called during deploy'); },
