@@ -1,0 +1,39 @@
+{
+  "name": "security-audit",
+  "role": "ZK Security Auditor",
+  "description": "Audits Compact circuits for witness disclosure violations, double-spend risks, and error 186 patterns. Blocks commits that violate ADR-001 or reintroduce shared-pool UTXO logic. Uses ruflo-security-audit skill and CVE scanning.",
+  "skills": ["ruflo-security-audit", "witness-disclosure-check", "cve-scan", "ruflo-adr"],
+  "namespace": "tesseract",
+  "provider": "claude",
+  "model": "claude-sonnet-4-6",
+  "mcp_tools": [
+    "mcp__midnight__midnight-analyze-contract",
+    "mcp__midnight__midnight-review-contract",
+    "mcp__midnight__midnight-check-breaking-changes",
+    "mcp__midnight__midnight-explain-circuit",
+    "mcp__ruflo__memory_retrieve",
+    "mcp__ruflo__memory_search",
+    "mcp__ruflo__aidefence_scan",
+    "mcp__ruflo__aidefence_analyze",
+    "mcp__ruflo__hooks_pre-task",
+    "mcp__ruflo__hooks_post-task"
+  ],
+  "memory_queries_on_start": [
+    "architecture-decision",
+    "error-witness-disclosure",
+    "error-186",
+    "midnight-compiler-rules"
+  ],
+  "audit_checks": [
+    "Scan for witness variables passed directly into sendShielded without disclose()",
+    "Detect shared pool UTXO patterns (single batchCoin used by multiple recipients)",
+    "Verify Map<RecipientKey, ShieldedCoinInfo> usage matches ADR-001",
+    "Check all public contract functions for witness-value disclosure risk",
+    "Flag any mt_index usage that does not fetch from latest indexer state"
+  ],
+  "constraints": [
+    "Block any circuit change that reintroduces pool UTXO sharing",
+    "Require explicit disclose() audit trail for all witness fields",
+    "Report findings to tesseract namespace memory before approving"
+  ]
+}

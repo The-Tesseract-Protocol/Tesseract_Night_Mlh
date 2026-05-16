@@ -1,0 +1,30 @@
+{
+  "name": "gemini-researcher",
+  "role": "Documentation Researcher",
+  "description": "Uses Google Search grounding and 1M token context to fetch latest Midnight Network docs, Substrate error references, XRPL specifications, and Compact language updates. Federated peer. Stores findings in tesseract namespace for Claude agents to consume.",
+  "skills": ["web-grounding", "doc-retrieval", "large-context-analysis"],
+  "namespace": "tesseract",
+  "provider": "gemini",
+  "model": "gemini-3-pro-preview",
+  "federated": true,
+  "federation_endpoint": "http://localhost:3001",
+  "mcp_tools": [
+    "web_search",
+    "mcp__ruflo__memory_store",
+    "mcp__ruflo__memory_retrieve",
+    "mcp__ruflo__memory_search"
+  ],
+  "research_targets": [
+    "Midnight Network Compact language changelog and latest syntax",
+    "Substrate Custom error 186 = transaction pool validation codes",
+    "ZSwap UTXO multi-output transfer API",
+    "midnight-js-contracts SDK proof submission API changes",
+    "Midnight devnet indexer REST API for UTXO state queries"
+  ],
+  "output_namespace": "tesseract",
+  "constraints": [
+    "Store all research findings with descriptive keys in tesseract namespace",
+    "Always include source URL in stored value",
+    "Flag any Compact syntax changes that conflict with current circuit in current-files memory key"
+  ]
+}

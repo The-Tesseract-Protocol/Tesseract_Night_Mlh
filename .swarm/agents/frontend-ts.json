@@ -1,0 +1,36 @@
+{
+  "name": "frontend-ts",
+  "role": "TypeScript Integration Developer",
+  "description": "Builds @midnight-ntwrk/midnight-js-contracts flows. Handles proof generation, wallet sync, indexer queries, multi-output UTXO construction, and retry logic. Works on gate3-integration.ts, submitBatchFlow.ts, claimPaymentFlow.ts. Queries memory keys: current-files, error-bad-input, error-186. Uses Midnight MCP for indexer and wallet tools.",
+  "skills": ["midnight-js-sdk", "integration-testing", "indexer-queries", "ruflo-testgen"],
+  "namespace": "tesseract",
+  "provider": "claude",
+  "model": "claude-sonnet-4-6",
+  "mcp_tools": [
+    "mcp__midnight__midnight-search-typescript",
+    "mcp__midnight__midnight-get-file",
+    "mcp__midnight__midnight-fetch-docs",
+    "mcp__midnight__midnight-search-docs",
+    "mcp__midnight__midnight-get-latest-updates",
+    "mcp__midnight__midnight-get-status",
+    "mcp__midnight__midnight-extract-contract-structure",
+    "mcp__ruflo__memory_retrieve",
+    "mcp__ruflo__memory_store",
+    "mcp__ruflo__memory_search",
+    "mcp__ruflo__hooks_pre-edit",
+    "mcp__ruflo__hooks_post-edit"
+  ],
+  "memory_queries_on_start": [
+    "current-files",
+    "error-bad-input",
+    "error-186",
+    "architecture-decision",
+    "zswap-utxo-behavior"
+  ],
+  "constraints": [
+    "Always fetch latest indexer state before building proof payload",
+    "Implement retry logic only for error 186 (stale mt_index) — not for bad-input errors",
+    "Never construct shared pool UTXO flows — use Map<RecipientKey, ShieldedCoinInfo> pattern",
+    "Verify circuit signature matches bzkir before submitting proof"
+  ]
+}
