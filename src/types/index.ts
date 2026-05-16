@@ -17,6 +17,20 @@ export interface Recipient {
   amount: bigint;
 }
 
+export interface RecipientEntry {
+  key: string;            // ZswapCoinPublicKey as hex
+  amount: bigint;
+  leafHash: Uint8Array;        // raw leaf hash (before batchId compound)
+  claimSecret: Uint8Array;     // 32 random bytes; all-zeros for addressed mode
+  bearerMode: boolean;         // true = claimSecret is the leaf key input
+}
+
+export interface DepositCoinInput {
+  batchId: Uint8Array;
+  recipientLeafHash: Uint8Array;
+  coin: { nonce: Uint8Array; color: Uint8Array; value: bigint };
+}
+
 export interface ClaimPackage {
   batchId: HexString;
   leafIndex: number;
@@ -33,6 +47,7 @@ export interface BatchSubmitResult {
   totalAmount: bigint;
   claimPackages: ClaimPackage[];
   deadline: bigint;           // Unix timestamp seconds
+  deposits: DepositCoinInput[];   // one per recipient, in order
 }
 
 // ── Claim ────────────────────────────────────────────────────────────────────
@@ -98,11 +113,13 @@ export interface ClaimPrivateState {
   merkleProof: MerkleTreePath<Uint8Array>;
   leafKey: { bytes: Uint8Array };
   claimSecret: Uint8Array;
+  recipientCoin: { nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint };
 }
 
 export interface ReclaimPrivateState {
   payerKey: { bytes: Uint8Array };
   batchNonce: Uint8Array;
+  reclaimCoin: { nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint };
 }
 
 export interface PaymentRequestPrivateState {
