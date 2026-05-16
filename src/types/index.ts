@@ -3,7 +3,7 @@
  * All hex strings are lowercase without 0x prefix.
  */
 
-import { MerkleTreePath } from '@midnight-ntwrk/compact-runtime';
+import type { MerkleTreePath } from '@midnight-ntwrk/compact-runtime';
 
 // ── Primitive wrappers ──────────────────────────────────────────────────────
 

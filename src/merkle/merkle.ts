@@ -9,7 +9,7 @@
  * MerkleTreePath uses goes_left (snake_case) to match compiled contract types.
  */
 
-import { MerkleTreePath, MerkleTreePathEntry } from '@midnight-ntwrk/compact-runtime';
+import type { MerkleTreePath, MerkleTreePathEntry } from '@midnight-ntwrk/compact-runtime';
 import { merkleInternalHash, leafToField } from '../contract/descriptors.js';
 
 export const TREE_DEPTH = 16;
@@ -17,18 +17,6 @@ const MAX_LEAVES = 1 << TREE_DEPTH; // 65536
 
 // Empty leaf field value (zeroed 32 bytes degraded to field)
 const EMPTY_LEAF_FIELD = leafToField(new Uint8Array(32));
-
-function emptyNodeAtHeight(height: number, cache: Map<number, bigint>): bigint {
-  if (cache.has(height)) return cache.get(height)!;
-  if (height === 0) {
-    cache.set(0, EMPTY_LEAF_FIELD);
-    return EMPTY_LEAF_FIELD;
-  }
-  const child = emptyNodeAtHeight(height - 1, cache);
-  const node = merkleInternalHash(child, child);
-  cache.set(height, node);
-  return node;
-}
 
 export interface MerkleTreeResult {
   root: bigint; // Field value — stored in batchMerkleRoots on-chain
@@ -43,8 +31,6 @@ export interface MerkleTreeResult {
 export function buildMerkleTree(leaves: Uint8Array[]): MerkleTreeResult {
   if (leaves.length === 0) throw new Error('At least one leaf required');
   if (leaves.length > MAX_LEAVES) throw new Error(`Max ${MAX_LEAVES} leaves`);
-
-  const emptyCache = new Map<number, bigint>();
 
   // Build level 0 (leaves) as field elements, pad to MAX_LEAVES
   const level0: bigint[] = [];
