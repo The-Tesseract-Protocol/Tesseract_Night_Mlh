@@ -1,87 +1,52 @@
 /**
- * reclaimFlow — Payer recovers unclaimed funds after batch deadline.
+ * reclaimFlow — payer reclaims unclaimed coins per leaf (Path A).
  *
- * Flow:
- * 1. Load payerKey + batchNonce from storage (saved at submitBatch time)
- * 2. Build witness private state
- * 3. Return for circuit call: reclaimExpiredBatch(batchId)
- *
- * Circuit checks:
- * - blockTimeGt(deadline) — deadline must have passed
- * - !batchReclaimed — not already reclaimed
- * - persistentHash(payerKey, batchNonce) == storedCommitment — payer identity
+ * For each unclaimed leaf, builds ReclaimPrivateState with reclaimCoin
+ * from indexer. Caller iterates and calls reclaimRecipientCoin per leaf.
  */
 
-import {
-  ReclaimPrivateState,
-  HexString,
-  fromHex,
-} from '../types/index.js';
+import { ReclaimPrivateState, HexString, fromHex } from '../types/index.js';
 import type { PayerRecord } from './submitBatchFlow.js';
 
-export interface ReclaimFlowInput {
+export interface ReclaimLeafInput {
   batchIdHex: HexString;
+  leafHashHex: HexString;
   payerKeyHex: HexString;
   batchNonceHex: HexString;
+  reclaimCoin: { nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint };
 }
 
-export interface ReclaimFlowOutput {
+export interface ReclaimLeafOutput {
   batchId: Uint8Array;
+  recipientLeafHash: Uint8Array;
   privateState: ReclaimPrivateState;
 }
 
-export function prepareReclaim(input: ReclaimFlowInput): ReclaimFlowOutput {
-  const { batchIdHex, payerKeyHex, batchNonceHex } = input;
-
-  const batchId = fromHex(batchIdHex);
-  const payerKeyBytes = fromHex(payerKeyHex);
-  const batchNonceBytes = fromHex(batchNonceHex);
-
-  const privateState: ReclaimPrivateState = {
-    payerKey: { bytes: payerKeyBytes },
-    batchNonce: batchNonceBytes,
-  };
-
-  return { batchId, privateState };
-}
-
-/**
- * Build witnesses for reclaimExpiredBatch circuit.
- */
-export function buildReclaimWitnesses(state: ReclaimPrivateState) {
+export function prepareReclaimLeaf(input: ReclaimLeafInput): ReclaimLeafOutput {
   return {
-    getBatchCoin: () => { throw new Error('wrong circuit'); },
-    getMerkleRoot: () => { throw new Error('wrong circuit'); },
-    getTotalAmount: () => { throw new Error('wrong circuit'); },
-    getPayerKey: () => { throw new Error('wrong circuit'); },
-    getBatchNonce: () => { throw new Error('wrong circuit'); },
-    getClaimAmount: () => { throw new Error('wrong circuit'); },
-    getMerkleProof: () => { throw new Error('wrong circuit'); },
-    getLeafKey: () => { throw new Error('wrong circuit'); },
-    getClaimSecret: () => { throw new Error('wrong circuit'); },
-    getReclaimPayerKey: () => state.payerKey,
-    getReclaimBatchNonce: () => state.batchNonce,
-    getRequesterKey: () => { throw new Error('wrong circuit'); },
-    getRequestNonce: () => { throw new Error('wrong circuit'); },
-    getMarkRequesterKey: () => { throw new Error('wrong circuit'); },
-    getMarkRequestNonce: () => { throw new Error('wrong circuit'); },
+    batchId: fromHex(input.batchIdHex),
+    recipientLeafHash: fromHex(input.leafHashHex),
+    privateState: {
+      payerKey: { bytes: fromHex(input.payerKeyHex) },
+      batchNonce: fromHex(input.batchNonceHex),
+      reclaimCoin: input.reclaimCoin,
+    },
   };
 }
 
-/**
- * Load reclaim input from a stored PayerRecord.
- */
-export function reclaimFromPayerRecord(record: PayerRecord): ReclaimFlowInput {
-  return {
-    batchIdHex: record.batchIdHex,
-    payerKeyHex: record.payerKeyHex,
-    batchNonceHex: record.batchNonceHex,
-  };
-}
-
-/**
- * Check if a batch is eligible for reclaim (client-side, not authoritative).
- */
 export function isEligibleForReclaim(record: PayerRecord): boolean {
   return Date.now() / 1000 > record.deadline;
+}
+
+export function reclaimLeafInputsFromRecord(
+  record: PayerRecord,
+  coins: Array<{ leafHashHex: HexString; coin: { nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint } }>,
+): ReclaimLeafInput[] {
+  return coins.map(({ leafHashHex, coin }) => ({
+    batchIdHex: record.batchIdHex,
+    leafHashHex,
+    payerKeyHex: record.payerKeyHex,
+    batchNonceHex: record.batchNonceHex,
+    reclaimCoin: coin,
+  }));
 }
