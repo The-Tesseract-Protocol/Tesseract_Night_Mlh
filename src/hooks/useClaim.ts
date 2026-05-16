@@ -6,13 +6,16 @@
 import { useState, useCallback } from 'react';
 import { prepareClaimPayment, buildClaimWitnesses, parseClaimUrl } from '../flows/claimPaymentFlow.js';
 import type { ClaimParams, ClaimResult } from '../../agents/interfaces/claimPaymentFlow.js';
-import { deserializeClaimPackage } from '../flows/claimPackageSerde.js';
 import { hashClaimNullifier } from '../contract/descriptors.js';
 import { fromHex, toHex } from '../types/index.js';
 
 export function useClaim(
   callCircuit?: (circuitName: string, witnesses: object, args: unknown[]) => Promise<string>,
   auditorPublicKeyHex?: string,
+  getRecipientCoin?: (
+    batchIdHex: string,
+    leafHashHex: string,
+  ) => Promise<{ nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint } | null>,
 ) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export function useClaim(
 
   const claim = useCallback(async (params: ClaimParams): Promise<ClaimResult> => {
     if (!callCircuit) throw new Error('Contract not connected');
+    if (!params.merkleProof) throw new Error('merkleProof required');
 
     setIsLoading(true);
     setError(null);
@@ -41,6 +45,10 @@ export function useClaim(
         ? fromHex(auditorPublicKeyHex)
         : undefined;
 
+      if (!getRecipientCoin) throw new Error('getRecipientCoin not provided to useClaim');
+      const recipientCoin = await getRecipientCoin(params.batchId, params.merkleProof.leaf);
+      if (!recipientCoin) throw new Error(`No coin found for batch ${params.batchId} — deposit not confirmed yet`);
+
       const { batchId, encryptedAuditMemo, privateState } = await prepareClaimPayment({
         batchIdHex: params.batchId,
         leafIndex: params.leafIndex,
@@ -48,6 +56,7 @@ export function useClaim(
         claimSecretHex: params.claimSecret,
         leafKeyHex: params.leafKey,
         serializedProof: params.merkleProof,
+        recipientCoin,
         auditorPublicKey,
       });
 
@@ -70,7 +79,7 @@ export function useClaim(
     } finally {
       setIsLoading(false);
     }
-  }, [callCircuit, auditorPublicKeyHex]);
+  }, [callCircuit, auditorPublicKeyHex, getRecipientCoin]);
 
   return { parseCurrentUrl, claim, isLoading, error, clearError };
 }
