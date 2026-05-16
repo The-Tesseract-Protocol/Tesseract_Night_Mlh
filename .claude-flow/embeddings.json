@@ -1,0 +1,18 @@
+{
+  "model": "Xenova/all-mpnet-base-v2",
+  "modelPath": "/Users/18abhinav07/Documents/Vaults/TESSERACT/active/midnight-mlh-2026-05/build/Tesseract_Midnight/.claude-flow/models",
+  "dimension": 768,
+  "cacheSize": 256,
+  "hyperbolic": {
+    "enabled": true,
+    "curvature": -1,
+    "epsilon": 1e-15,
+    "maxNorm": 0.99999
+  },
+  "neural": {
+    "enabled": true,
+    "driftThreshold": 0.3,
+    "decayRate": 0.01
+  },
+  "initialized": "2026-05-16T09:38:34.895Z"
+}
