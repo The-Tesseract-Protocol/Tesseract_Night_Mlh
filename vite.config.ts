@@ -9,7 +9,18 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  define: {
+    global: 'globalThis',
+  },
+  resolve: {
+    alias: {
+      'isomorphic-ws': 'ws'
+    }
+  },
   optimizeDeps: {
+    include: [
+      'object-inspect'
+    ],
     exclude: [
       '@midnight-ntwrk/onchain-runtime-v3',
       '@midnight-ntwrk/compact-runtime',

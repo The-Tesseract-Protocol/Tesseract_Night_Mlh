@@ -1,12 +1,8 @@
-/**
- * useBatchPay — React hook for Submit Batch + Reclaim flows.
- * Wraps submitBatchFlow and reclaimFlow with state management and IndexedDB persistence.
- */
-
 import { useState, useCallback, useEffect } from 'react';
 import { prepareSubmitBatch, isEligibleForReclaim, type PayerRecord } from '../flows/submitBatchFlow.js';
-import { toHex } from '../types/index.js';
-import type { Recipient, BatchResult, BatchState } from '../../agents/interfaces/submitBatchFlow.js';
+import { prepareReclaimLeaf } from '../flows/reclaimFlow.js';
+import { fromHex } from '../types/index.js';
+import type { TesseractClient } from '../contract/client.js';
 
 const DB_NAME = 'tesseract-payer';
 const STORE_NAME = 'payer-records';
@@ -40,48 +36,41 @@ async function loadAllRecords(): Promise<PayerRecord[]> {
   });
 }
 
+export interface BatchSummary {
+  batchId: string;
+  totalAmount: bigint;
+  deadline: bigint;
+  isReclaimed?: boolean;
+  claimPackages: Array<{ amount: string; shareableLink: string }>;
+}
+
 export function useBatchPay(
-  _contractAddress: string | null,
+  client: TesseractClient | null,
   coinPublicKey: string | null,
-  /** Call circuit — provided by contract client layer */
-  callCircuit?: (circuitName: string, args: unknown[]) => Promise<string>,
 ) {
-  const [batches, setBatches] = useState<BatchState[]>([]);
+  const [batches, setBatches] = useState<BatchSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const clearError = useCallback(() => setError(null), []);
 
-  // Load stored payer records on mount
   useEffect(() => {
     loadAllRecords().then(records => {
-      const states: BatchState[] = records.map(r => ({
+      setBatches(records.map(r => ({
         batchId: r.batchIdHex,
         totalAmount: BigInt(r.totalAmount),
-        claimedAmount: 0n,
         deadline: BigInt(r.deadline),
-        isReclaimed: false,
-        claimCount: r.claimPackages.length,
-        claimPackages: r.claimPackages.map(p => ({
-          batchId: p.batchId,
-          leafIndex: p.leafIndex,
-          amount: BigInt(p.amount),
-          claimSecret: p.claimSecret,
-          leafKey: p.leafKey,
-          merkleProof: p.merkleProof,
-          shareableLink: p.shareableLink,
-        })),
-      }));
-      setBatches(states);
+        claimPackages: r.claimPackages.map(p => ({ amount: p.amount, shareableLink: p.shareableLink })),
+      })));
     }).catch(() => {});
   }, []);
 
   const createBatch = useCallback(async (
-    recipients: Recipient[],
+    recipients: Array<{ key: string; amount: bigint }>,
     deadlineHours: number,
-  ): Promise<BatchResult> => {
-    if (!coinPublicKey) throw new Error('Wallet not connected');
-    if (!callCircuit) throw new Error('Contract not connected');
+    auditorPublicKeyHex?: string,
+  ) => {
+    if (!coinPublicKey || !client) throw new Error('Wallet or contract not connected');
 
     setIsLoading(true);
     setError(null);
@@ -91,65 +80,26 @@ export function useBatchPay(
           recipients,
           deadlineHours,
           payerKeyHex: coinPublicKey,
+          auditorPublicKeyHex,
         });
 
       // Phase 1: submit batch root
-      const txHash = await callCircuit('submitBatchRoot', [batchId, deadline, privateState]);
+      const txHash = await client.submitBatch(batchId, deadline, privateState);
 
-      // Phase 2: deposit per recipient (sequential)
+      // Phase 2: deposit per recipient
       for (const dep of deposits) {
-        await callCircuit('depositRecipientCoin', [dep.batchId, dep.recipientLeafHash, dep.coin]);
+        await client.depositCoin(dep.batchId, dep.recipientLeafHash, dep.coin);
       }
 
       await saveRecord(payerRecord);
-
-      const batchState: BatchState = {
+      setBatches(prev => [...prev, {
         batchId: batchIdHex,
         totalAmount: BigInt(payerRecord.totalAmount),
-        claimedAmount: 0n,
         deadline,
-        isReclaimed: false,
-        claimCount: recipients.length,
-        claimPackages: claimPackages.map(p => ({
-          batchId: p.batchId,
-          leafIndex: p.leafIndex,
-          amount: p.amount,
-          claimSecret: p.claimSecret,
-          leafKey: p.leafKey,
-          merkleProof: {
-            leaf: toHex(p.merkleProof.leaf),
-            path: p.merkleProof.path.map((e: { sibling: { field: bigint }; goes_left: boolean }) => ({
-              sibling: { field: e.sibling.field.toString() },
-              goes_left: e.goes_left,
-            })),
-          },
-          shareableLink: p.shareableLink,
-        })),
-      };
-      setBatches(prev => [...prev, batchState]);
+        claimPackages: payerRecord.claimPackages.map(p => ({ amount: p.amount, shareableLink: p.shareableLink })),
+      }]);
 
-      return {
-        batchId: batchIdHex,
-        merkleRoot: privateState.merkleRoot.toString(),
-        totalAmount: BigInt(payerRecord.totalAmount),
-        claimPackages: claimPackages.map(p => ({
-          batchId: p.batchId,
-          leafIndex: p.leafIndex,
-          amount: p.amount,
-          claimSecret: p.claimSecret,
-          leafKey: p.leafKey,
-          shareableLink: p.shareableLink,
-          merkleProof: {
-            leaf: toHex(p.merkleProof.leaf),
-            path: p.merkleProof.path.map((e: { sibling: { field: bigint }; goes_left: boolean }) => ({
-              sibling: { field: e.sibling.field.toString() },
-              goes_left: e.goes_left,
-            })),
-          },
-        })),
-        deadline,
-        txHash,
-      };
+      return { txHash, claimPackages };
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Batch creation failed';
       setError(msg);
@@ -157,18 +107,53 @@ export function useBatchPay(
     } finally {
       setIsLoading(false);
     }
-  }, [coinPublicKey, callCircuit]);
+  }, [coinPublicKey, client]);
 
-  const reclaim = useCallback(async (batchId: string): Promise<{ txHash: string }> => {
-    if (!callCircuit) throw new Error('Contract not connected');
-    const records = await loadAllRecords();
-    const record = records.find(r => r.batchIdHex === batchId);
-    if (!record) throw new Error('Batch record not found');
-    if (!isEligibleForReclaim(record)) throw new Error('Batch deadline not yet passed');
+  const reclaim = useCallback(async (batchId: string): Promise<number> => {
+    if (!client) throw new Error('Contract not connected');
 
-    // Path A reclaim is per-leaf; full implementation in Task 12
-    throw new Error('Per-leaf reclaim not yet implemented in hook; use TesseractClient directly');
-  }, [callCircuit]);
+    setIsLoading(true);
+    setError(null);
+    try {
+      const records = await loadAllRecords();
+      const record = records.find(r => r.batchIdHex === batchId);
+      if (!record) throw new Error('Batch record not found in local storage');
+      if (!isEligibleForReclaim(record)) throw new Error('Batch deadline has not passed yet');
+
+      const batchIdBytes = fromHex(record.batchIdHex);
+      let reclaimedCount = 0;
+
+      for (const leafHashHex of record.leafHashes) {
+        const coin = await client.getRecipientCoin(batchIdBytes, fromHex(leafHashHex));
+        if (!coin) continue; // already claimed or never deposited
+
+        const { batchId: bId, recipientLeafHash, privateState } = prepareReclaimLeaf({
+          batchIdHex: record.batchIdHex,
+          leafHashHex,
+          payerKeyHex: record.payerKeyHex,
+          batchNonceHex: record.batchNonceHex,
+          reclaimCoin: coin,
+        });
+
+        await client.reclaimRecipientCoin(bId, recipientLeafHash, privateState);
+        reclaimedCount++;
+      }
+
+      if (reclaimedCount > 0) {
+        setBatches(prev => prev.map(b =>
+          b.batchId === batchId ? { ...b, isReclaimed: true } : b,
+        ));
+      }
+
+      return reclaimedCount;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Reclaim failed';
+      setError(msg);
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [client]);
 
   return { createBatch, reclaim, batches, isLoading, error, clearError };
 }

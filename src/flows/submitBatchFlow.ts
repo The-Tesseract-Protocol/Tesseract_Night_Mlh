@@ -28,6 +28,7 @@ export interface SubmitBatchInput {
   recipients: Array<{ key: string; amount: bigint; bearerMode?: boolean }>;
   deadlineHours: number;
   payerKeyHex: HexString;
+  auditorPublicKeyHex?: HexString; // if set, embedded in every claim URL
   appBaseUrl?: string;
 }
 
@@ -70,7 +71,7 @@ export interface SubmitBatchOutput {
 }
 
 export function prepareSubmitBatch(input: SubmitBatchInput): SubmitBatchOutput {
-  const { recipients, deadlineHours, payerKeyHex, appBaseUrl = '/' } = input;
+  const { recipients, deadlineHours, payerKeyHex, auditorPublicKeyHex, appBaseUrl = '/' } = input;
 
   if (recipients.length === 0) throw new Error('No recipients');
   if (recipients.length > 65536) throw new Error('Max 65536 recipients');
@@ -119,17 +120,6 @@ export function prepareSubmitBatch(input: SubmitBatchInput): SubmitBatchOutput {
     const proof = proofs[i];
     const leafKeyForLink = entry.bearerMode ? toHex(entry.claimSecret) : entry.key;
 
-    const params = new URLSearchParams({
-      batchId: batchIdHex,
-      leafIndex: i.toString(),
-      leafHash: toHex(entry.leafHash),
-      amount: entry.amount.toString(),
-      claimSecret: toHex(entry.claimSecret),
-      leafKey: leafKeyForLink,
-      bearer: entry.bearerMode ? '1' : '0',
-    });
-    const shareableLink = `${appBaseUrl}claim?${params.toString()}`;
-
     const serializedProof: SerializedMerkleProof = {
       leaf: toHex(proof.leaf),
       path: proof.path.map((n: any) => ({
@@ -137,6 +127,20 @@ export function prepareSubmitBatch(input: SubmitBatchInput): SubmitBatchOutput {
         goes_left: n.goes_left,
       })),
     };
+
+    const urlParams: Record<string, string> = {
+      batchId: batchIdHex,
+      leafIndex: i.toString(),
+      leafHash: toHex(entry.leafHash),
+      amount: entry.amount.toString(),
+      claimSecret: toHex(entry.claimSecret),
+      leafKey: leafKeyForLink,
+      bearer: entry.bearerMode ? '1' : '0',
+      proof: btoa(JSON.stringify(serializedProof)),
+    };
+    if (auditorPublicKeyHex) urlParams.auditor = auditorPublicKeyHex;
+    const params = new URLSearchParams(urlParams);
+    const shareableLink = `${appBaseUrl}claim?${params.toString()}`;
 
     claimPackages.push({
       batchId: batchIdHex,

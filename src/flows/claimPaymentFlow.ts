@@ -127,9 +127,12 @@ export function buildClaimWitnesses(state: ClaimPrivateState) {
  * Parse claim params from a shareable URL.
  * URL format: /claim?batchId=...&leafIndex=...&amount=...&claimSecret=...&leafKey=...
  */
-export function parseClaimUrl(url: string): Omit<ClaimFlowInput, 'serializedProof'> | null {
+export function parseClaimUrl(url: string): ClaimFlowInput | null {
   try {
     const params = new URL(url).searchParams;
+    const proofB64 = params.get('proof');
+    const serializedProof = proofB64 ? JSON.parse(atob(proofB64)) : undefined;
+    const auditorParam = params.get('auditor');
     return {
       batchIdHex: params.get('batchId')!,
       leafIndex: parseInt(params.get('leafIndex')!),
@@ -138,6 +141,8 @@ export function parseClaimUrl(url: string): Omit<ClaimFlowInput, 'serializedProo
       claimSecretHex: params.get('claimSecret')!,
       leafKeyHex: params.get('leafKey')!,
       bearerMode: params.get('bearer') === '1',
+      serializedProof,
+      auditorPublicKey: auditorParam ? fromHex(auditorParam) : undefined,
     };
   } catch {
     return null;

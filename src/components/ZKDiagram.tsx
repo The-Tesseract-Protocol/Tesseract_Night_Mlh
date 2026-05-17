@@ -2,14 +2,14 @@ import { memo } from 'react';
 import { motion } from 'framer-motion';
 
 const nodes = [
-  { id: 'payer',   x: 200, y: 48,  r: 22, label: 'Payer',      color: '#22d3ee', textColor: '#0e1a1d' },
-  { id: 'root',    x: 200, y: 148, r: 18, label: 'Batch Root', color: '#67e8f9', textColor: '#0e1a1d' },
-  { id: 'coin0',   x: 80,  y: 248, r: 14, label: 'Coin',       color: '#3f3f46', textColor: '#a1a1aa' },
-  { id: 'coin1',   x: 200, y: 248, r: 14, label: 'Coin',       color: '#3f3f46', textColor: '#a1a1aa' },
-  { id: 'coin2',   x: 320, y: 248, r: 14, label: 'Coin',       color: '#3f3f46', textColor: '#a1a1aa' },
-  { id: 'recv0',   x: 80,  y: 348, r: 16, label: 'R₀',         color: '#27272a', textColor: '#71717a' },
-  { id: 'recv1',   x: 200, y: 348, r: 16, label: 'R₁',         color: '#27272a', textColor: '#71717a' },
-  { id: 'recv2',   x: 320, y: 348, r: 16, label: 'R₂',         color: '#27272a', textColor: '#71717a' },
+  { id: 'payer',   x: 400, y: 50,  r: 28, label: 'Payer',      color: '#22d3ee', textColor: '#000000' },
+  { id: 'root',    x: 400, y: 160, r: 24, label: 'Batch Root', color: '#67e8f9', textColor: '#000000' },
+  { id: 'coin0',   x: 180, y: 280, r: 18, label: 'Coin',       color: '#18181b', textColor: '#a1a1aa' },
+  { id: 'coin1',   x: 400, y: 280, r: 18, label: 'Coin',       color: '#18181b', textColor: '#a1a1aa' },
+  { id: 'coin2',   x: 620, y: 280, r: 18, label: 'Coin',       color: '#18181b', textColor: '#a1a1aa' },
+  { id: 'recv0',   x: 180, y: 380, r: 20, label: 'R₀',         color: '#09090b', textColor: '#71717a' },
+  { id: 'recv1',   x: 400, y: 380, r: 20, label: 'R₁',         color: '#09090b', textColor: '#71717a' },
+  { id: 'recv2',   x: 620, y: 380, r: 20, label: 'R₂',         color: '#09090b', textColor: '#71717a' },
 ];
 
 const edges = [
@@ -27,40 +27,41 @@ const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
 function getEdgePath(from: string, to: string) {
   const a = nodeMap[from];
   const b = nodeMap[to];
-  return `M ${a.x} ${a.y + a.r} L ${b.x} ${b.y - b.r}`;
+  // Simple cubic bezier curve for high-end feel
+  return `M ${a.x} ${a.y + a.r} C ${a.x} ${(a.y + b.y)/2}, ${b.x} ${(a.y + b.y)/2}, ${b.x} ${b.y - b.r}`;
 }
 
 export const ZKDiagram = memo(function ZKDiagram() {
   return (
-    <svg viewBox="0 0 400 420" className="w-full h-full" style={{ maxHeight: 420 }}>
+    <svg viewBox="0 0 800 460" className="w-full h-full" style={{ maxHeight: 460 }}>
       {/* Background dot grid */}
       <defs>
-        <pattern id="dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
-          <circle cx="1" cy="1" r="0.8" fill="rgba(63,63,70,0.5)" />
+        <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="1" fill="rgba(255,255,255,0.05)" />
         </pattern>
         <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.15" />
+          <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.2" />
           <stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
         </radialGradient>
       </defs>
 
-      <rect width="400" height="420" fill="url(#dots)" />
+      <rect width="800" height="460" fill="url(#dots)" />
 
       {/* Ambient glow behind payer */}
-      <ellipse cx="200" cy="48" rx="80" ry="60" fill="url(#glow)" />
+      <ellipse cx="400" cy="50" rx="120" ry="80" fill="url(#glow)" />
 
       {/* ZK proof labels */}
-      {[{ x: 80, y: 300 }, { x: 200, y: 300 }, { x: 320, y: 300 }].map((pos, i) => (
+      {[{ x: 180, y: 330 }, { x: 400, y: 330 }, { x: 620, y: 330 }].map((pos, i) => (
         <motion.text
           key={i}
           x={pos.x}
           y={pos.y}
           textAnchor="middle"
-          fontSize="8"
+          fontSize="10"
           fill="#22d3ee"
           fontFamily="JetBrains Mono, monospace"
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.6, 0.6, 0] }}
+          animate={{ opacity: [0, 0.8, 0.8, 0] }}
           transition={{ duration: 3, repeat: Infinity, delay: 1.2 + i * 0.15, ease: 'easeInOut' }}
         >
           zk-proof
@@ -74,11 +75,11 @@ export const ZKDiagram = memo(function ZKDiagram() {
           d={getEdgePath(edge.from, edge.to)}
           fill="none"
           stroke={edge.color}
-          strokeWidth="1.5"
+          strokeWidth="2"
           strokeLinecap="round"
           initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: 0.6 }}
-          transition={{ duration: 0.6, delay: edge.delay, ease: 'easeOut' }}
+          animate={{ pathLength: 1, opacity: 0.5 }}
+          transition={{ duration: 0.8, delay: edge.delay, ease: 'easeOut' }}
         />
       ))}
 
@@ -89,16 +90,16 @@ export const ZKDiagram = memo(function ZKDiagram() {
         return (
           <motion.circle
             key={`particle-${i}`}
-            r="2.5"
+            r="3"
             fill="#22d3ee"
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 0, cx: a.x, cy: a.y + a.r }}
             animate={{
-              opacity: [0, 0.8, 0],
+              opacity: [0, 1, 0],
               cx: [a.x, b.x],
               cy: [a.y + a.r, b.y - b.r],
             }}
             transition={{
-              duration: 1.4,
+              duration: 1.8,
               repeat: Infinity,
               delay: 1.5 + i * 0.6,
               ease: 'easeInOut',
@@ -118,30 +119,32 @@ export const ZKDiagram = memo(function ZKDiagram() {
           {/* Pulse ring on active nodes */}
           {(node.id === 'payer' || node.id === 'root') && (
             <motion.circle
-              cx={node.x} cy={node.y} r={node.r + 6}
+              cx={node.x} cy={node.y} r={node.r + 8}
               fill="none"
               stroke={node.color}
-              strokeWidth="1"
-              initial={{ opacity: 0.4, scale: 1 }}
-              animate={{ opacity: 0, scale: 1.5 }}
-              transition={{ duration: 2, repeat: Infinity, delay: i * 0.3, ease: 'easeOut' }}
+              strokeWidth="1.5"
+              initial={{ opacity: 0.5, scale: 1 }}
+              animate={{ opacity: 0, scale: 1.6 }}
+              transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.3, ease: 'easeOut' }}
               style={{ transformOrigin: `${node.x}px ${node.y}px` }}
             />
           )}
-          <circle cx={node.x} cy={node.y} r={node.r} fill={node.color} />
+          <circle cx={node.x} cy={node.y} r={node.r} fill={node.color} stroke={node.id.startsWith('recv') ? '#3f3f46' : 'none'} strokeWidth="2" />
           <text
             x={node.x} y={node.y}
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize={node.id === 'payer' || node.id === 'root' ? '8' : '7'}
+            fontSize={node.id === 'payer' || node.id === 'root' ? '10' : '9'}
             fill={node.textColor}
             fontFamily="Outfit, system-ui, sans-serif"
-            fontWeight="600"
+            fontWeight="700"
+            letterSpacing="0.05em"
           >
             {node.label}
           </text>
         </motion.g>
       ))}
     </svg>
+
   );
 });

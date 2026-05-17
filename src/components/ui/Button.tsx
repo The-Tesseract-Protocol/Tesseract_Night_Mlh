@@ -6,16 +6,16 @@ type Variant = 'primary' | 'ghost' | 'danger' | 'subtle';
 type Size = 'sm' | 'md' | 'lg';
 
 const variantStyles: Record<Variant, string> = {
-  primary: 'bg-[var(--accent)] text-zinc-950 font-semibold hover:bg-[var(--accent-hi)] shadow-[0_0_0_1px_var(--accent)]',
-  ghost:   'border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-hi)] hover:border-[var(--border)]',
-  danger:  'bg-[var(--error-dim)] text-[var(--error)] border border-[var(--error)]/20 hover:bg-[var(--error)]/20',
-  subtle:  'bg-[var(--surface-hi)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-zinc-700/50',
+  primary: 'bg-gradient-to-r from-[rgba(99,102,241,0.1)] to-[rgba(139,92,246,0.1)] border border-[var(--accent)] text-white font-semibold hover:from-[rgba(99,102,241,0.2)] hover:to-[rgba(139,92,246,0.2)] shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.5)] transition-all duration-300',
+  ghost:   'border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-hi)] hover:border-[rgba(255,255,255,0.2)] transition-all duration-300',
+  danger:  'bg-[var(--error-dim)] text-[var(--error)] border border-[var(--error)]/30 hover:bg-[var(--error)]/20 shadow-[0_0_15px_rgba(239,68,68,0.1)] transition-all duration-300',
+  subtle:  'bg-[var(--surface-hi)] text-[var(--muted)] hover:text-white hover:bg-[rgba(255,255,255,0.05)] border border-transparent transition-all duration-300',
 };
 
 const sizeStyles: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-xs rounded-lg',
-  md: 'px-4 py-2 text-sm rounded-lg',
-  lg: 'px-6 py-3 text-sm rounded-xl',
+  sm: 'px-4 py-2 text-xs rounded-full',
+  md: 'px-5 py-2.5 text-sm rounded-full',
+  lg: 'px-8 py-3.5 text-sm rounded-full',
 };
 
 interface ButtonProps extends ComponentPropsWithoutRef<'button'> {

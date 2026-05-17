@@ -12,8 +12,8 @@ function formatExpiry(deadline: bigint): string {
 }
 
 export function Reclaim() {
-  const { coinPublicKey, callCircuit } = useWallet();
-  const { batches, isLoading, error, reclaim } = useBatchPay(null, coinPublicKey, callCircuit as any);
+  const { coinPublicKey, client } = useWallet();
+  const { batches, isLoading, error, reclaim } = useBatchPay(client, coinPublicKey);
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, string>>({});
@@ -24,6 +24,7 @@ export function Reclaim() {
   const handleReclaim = useCallback(async (batchId: string) => {
     setProgress(p => ({ ...p, [batchId]: 'Reclaiming…' }));
     try {
+      if (!reclaim) throw new Error('Reclaim not available');
       await reclaim(batchId);
       setDone(d => new Set(d).add(batchId));
       setProgress(p => ({ ...p, [batchId]: 'Complete' }));
@@ -122,7 +123,7 @@ export function Reclaim() {
                           </div>
                         )}
                         <div className="space-y-2">
-                          {batch.claimPackages.map((pkg, i) => (
+                          {batch.claimPackages?.map((pkg: any, i: number) => (
                             <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs" style={{ background: 'var(--surface-hi)' }}>
                               <span className="font-mono w-6" style={{ color: 'var(--muted)' }}>#{i}</span>
                               <span className="font-mono font-medium">{pkg.amount.toString()} NIGHT</span>

@@ -1,22 +1,10 @@
-/**
- * usePaymentRequest — React hook for createPaymentRequest + markRequestPaid flows.
- */
-
 import { useState, useCallback, useEffect } from 'react';
 import {
   prepareCreatePaymentRequest,
-  buildCreateRequestWitnesses,
   prepareMarkRequestPaid,
-  buildMarkPaidWitnesses,
-  parsePaymentRequestUrl,
   type RequesterRecord,
 } from '../flows/paymentRequestFlow.js';
-import type {
-  CreateRequestParams,
-  CreateRequestResult,
-  PaymentRequest,
-  PaymentRequestUrlData,
-} from '../../agents/interfaces/paymentRequestFlow.js';
+import type { TesseractClient } from '../contract/client.js';
 
 const DB_NAME = 'tesseract-requests';
 const STORE_NAME = 'requester-records';
@@ -68,24 +56,11 @@ async function updateStatus(
   });
 }
 
-function recordToRequest(r: RequesterRecord): PaymentRequest {
-  return {
-    requestId: r.requestIdHex,
-    paymentLink: '',  // reconstructed at load time — not stored
-    deadline: BigInt(r.deadline),
-    description: r.description,
-    amount: r.amount ? BigInt(r.amount) : null,
-    currency: r.currency,
-    status: r.status,
-    createdAt: r.createdAt,
-  };
-}
-
 export function usePaymentRequest(
+  client: TesseractClient | null,
   coinPublicKey: string | null,
-  callCircuit?: (circuitName: string, witnesses: object, args: unknown[]) => Promise<string>,
 ) {
-  const [requests, setRequests] = useState<PaymentRequest[]>([]);
+  const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,15 +68,12 @@ export function usePaymentRequest(
 
   useEffect(() => {
     loadAllRecords()
-      .then(records => setRequests(records.map(recordToRequest)))
+      .then(records => setRequests(records))
       .catch(() => {});
   }, []);
 
-  const createRequest = useCallback(async (
-    params: CreateRequestParams,
-  ): Promise<CreateRequestResult> => {
-    if (!coinPublicKey) throw new Error('Wallet not connected');
-    if (!callCircuit) throw new Error('Contract not connected');
+  const createRequest = useCallback(async (params: any) => {
+    if (!coinPublicKey || !client) throw new Error('Wallet or contract not connected');
 
     setIsLoading(true);
     setError(null);
@@ -115,16 +87,12 @@ export function usePaymentRequest(
           currency: params.currency,
         });
 
-      const witnesses = buildCreateRequestWitnesses(privateState);
-      const txHash = await callCircuit('createPaymentRequest', witnesses, [requestId, deadline]);
+      const txHash = await client.createRequest(requestId, deadline, privateState);
 
       await saveRecord(requesterRecord);
+      setRequests(prev => [...prev, requesterRecord]);
 
-      const request = recordToRequest({ ...requesterRecord, status: 'open' });
-      request.paymentLink = paymentLink;
-      setRequests(prev => [...prev, request]);
-
-      return { request, txHash };
+      return { request: requesterRecord, txHash, paymentLink };
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Request creation failed';
       setError(msg);
@@ -132,10 +100,10 @@ export function usePaymentRequest(
     } finally {
       setIsLoading(false);
     }
-  }, [coinPublicKey, callCircuit]);
+  }, [coinPublicKey, client]);
 
-  const markPaid = useCallback(async (requestId: string): Promise<{ txHash: string }> => {
-    if (!callCircuit) throw new Error('Contract not connected');
+  const markPaid = useCallback(async (requestId: string) => {
+    if (!client) throw new Error('Contract not connected');
     const records = await loadAllRecords();
     const record = records.find(r => r.requestIdHex === requestId);
     if (!record) throw new Error('Request record not found');
@@ -148,12 +116,12 @@ export function usePaymentRequest(
         requesterKeyHex: record.requesterKeyHex,
         requestNonceHex: record.requestNonceHex,
       });
-      const witnesses = buildMarkPaidWitnesses(privateState);
-      const txHash = await callCircuit('markRequestPaid', witnesses, [requestIdBytes]);
+      
+      const txHash = await client.markPaid(requestIdBytes, privateState);
 
       await updateStatus(requestId, 'paid');
       setRequests(prev => prev.map(r =>
-        r.requestId === requestId ? { ...r, status: 'paid', txHash } : r,
+        r.requestIdHex === requestId ? { ...r, status: 'paid', txHash } : r,
       ));
 
       return { txHash };
@@ -164,11 +132,7 @@ export function usePaymentRequest(
     } finally {
       setIsLoading(false);
     }
-  }, [callCircuit]);
+  }, [client]);
 
-  const parsePaymentLink = useCallback((url: string): PaymentRequestUrlData | null => {
-    return parsePaymentRequestUrl(url);
-  }, []);
-
-  return { createRequest, markPaid, parsePaymentLink, requests, isLoading, error, clearError };
+  return { createRequest, markPaid, requests, isLoading, error, clearError };
 }

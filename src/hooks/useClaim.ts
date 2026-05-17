@@ -1,77 +1,59 @@
-/**
- * useClaim — React hook for the claimPayment flow.
- * Parses URL params, encrypts audit memo, calls circuit.
- */
-
 import { useState, useCallback } from 'react';
-import { prepareClaimPayment, buildClaimWitnesses, parseClaimUrl } from '../flows/claimPaymentFlow.js';
-import type { ClaimParams, ClaimResult } from '../../agents/interfaces/claimPaymentFlow.js';
+import { prepareClaimPayment, parseClaimUrl } from '../flows/claimPaymentFlow.js';
+import type { TesseractClient } from '../contract/client.js';
 import { hashClaimNullifier } from '../contract/descriptors.js';
 import { fromHex, toHex } from '../types/index.js';
 
 export function useClaim(
-  callCircuit?: (circuitName: string, witnesses: object, args: unknown[]) => Promise<string>,
+  client: TesseractClient | null,
   auditorPublicKeyHex?: string,
-  getRecipientCoin?: (
-    batchIdHex: string,
-    leafHashHex: string,
-  ) => Promise<{ nonce: Uint8Array; color: Uint8Array; value: bigint; mt_index: bigint } | null>,
 ) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const clearError = useCallback(() => setError(null), []);
 
-  const parseCurrentUrl = useCallback((): ClaimParams | null => {
-    const parsed = parseClaimUrl(window.location.href);
-    if (!parsed) return null;
-    return {
-      batchId: parsed.batchIdHex,
-      leafIndex: parsed.leafIndex,
-      amount: parsed.amount,
-      claimSecret: parsed.claimSecretHex,
-      leafKey: parsed.leafKeyHex,
-    };
+  const parseCurrentUrl = useCallback(() => {
+    return parseClaimUrl(window.location.href);
   }, []);
 
-  const claim = useCallback(async (params: ClaimParams): Promise<ClaimResult> => {
-    if (!callCircuit) throw new Error('Contract not connected');
-    if (!params.merkleProof) throw new Error('merkleProof required');
+  const claim = useCallback(async (params: any) => {
+    if (!client) throw new Error('Contract not connected');
+    if (!params.serializedProof) throw new Error('Invalid claim link — missing merkle proof');
 
     setIsLoading(true);
     setError(null);
     try {
-      const auditorPublicKey = auditorPublicKeyHex
-        ? fromHex(auditorPublicKeyHex)
-        : undefined;
+      // URL-embedded key takes priority; localStorage key is fallback for same-device demos
+      const resolvedAuditorKey = params.auditorPublicKey
+        ?? (auditorPublicKeyHex ? fromHex(auditorPublicKeyHex) : undefined);
+      const recipientCoin = await client.getRecipientCoin(
+        fromHex(params.batchIdHex),
+        fromHex(params.leafHashHex),
+      );
 
-      if (!getRecipientCoin) throw new Error('getRecipientCoin not provided to useClaim');
-      const recipientCoin = await getRecipientCoin(params.batchId, params.merkleProof.leaf);
-      if (!recipientCoin) throw new Error(`No coin found for batch ${params.batchId} — deposit not confirmed yet`);
+      if (!recipientCoin) throw new Error(`No coin found for batch ${params.batchIdHex} — deposit not yet confirmed`);
 
       const { batchId, encryptedAuditMemo, privateState } = await prepareClaimPayment({
-        batchIdHex: params.batchId,
+        batchIdHex: params.batchIdHex,
         leafIndex: params.leafIndex,
         amount: params.amount,
-        claimSecretHex: params.claimSecret,
-        leafKeyHex: params.leafKey,
-        serializedProof: params.merkleProof,
+        claimSecretHex: params.claimSecretHex,
+        leafKeyHex: params.leafKeyHex,
+        serializedProof: params.serializedProof,
         recipientCoin,
-        auditorPublicKey,
+        auditorPublicKey: resolvedAuditorKey,
       });
 
-      const witnesses = buildClaimWitnesses(privateState);
-      const txHash = await callCircuit('claimPayment', witnesses, [batchId, encryptedAuditMemo]);
+      const txHash = await client.claimPayment(batchId, encryptedAuditMemo, privateState);
 
-      // Compute nullifier for display
       const nullifierBytes = hashClaimNullifier(
         privateState.claimSecret,
         privateState.merkleProof.leaf,
         batchId,
       );
-      const nullifier = toHex(nullifierBytes);
 
-      return { txHash, nullifier, claimedAmount: params.amount };
+      return { txHash, nullifier: toHex(nullifierBytes), claimedAmount: params.amount };
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Claim failed';
       setError(msg);
@@ -79,7 +61,7 @@ export function useClaim(
     } finally {
       setIsLoading(false);
     }
-  }, [callCircuit, auditorPublicKeyHex, getRecipientCoin]);
+  }, [client, auditorPublicKeyHex]);
 
   return { parseCurrentUrl, claim, isLoading, error, clearError };
 }
